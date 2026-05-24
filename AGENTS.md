@@ -10,9 +10,8 @@ Si eres un agente de IA asignado a este repositorio, **DEBES** seguir estos paso
 
 ## 1. Fase de Inducción y Lectura de Documentación
 Antes de escribir cualquier línea de código, lee en su totalidad los siguientes archivos para comprender el contexto operativo, las reglas de negocio y las responsabilidades del equipo:
-*   [REQUIREMENTS.md](file:///home/gustadev/Workspace/University/7Sem/ps/AulaPass/REQUIREMENTS.md): Especificación detallada de requerimientos del sistema AulaPass, incluyendo tolerancia dinámica, faltas automáticas y cierres de sesión por olvido.
-*   [IMPLEMENTATION_PLAN.md](file:///home/gustadev/Workspace/University/7Sem/ps/AulaPass/IMPLEMENTATION_PLAN.md): Plan de implementación del equipo. Identifica qué integrante/rol representas y cuál es tu tarea asignada.
-*   [development_architecture_plan.md](file:///home/gustadev/.gemini/antigravity-cli/brain/b10978f0-bf77-42fc-aa66-4bca1387a581/development_architecture_plan.md): Lineamientos técnicos de arquitectura, modelo relacional local, mocks y estrategias de pruebas con agentes.
+*   @REQUIREMENTS.md: Especificación detallada de requerimientos del sistema AulaPass, incluyendo tolerancia dinámica, faltas automáticas y cierres de sesión por olvido.
+*   @IMPLEMENTATION_PLAN.md: Plan de implementación del equipo. Identifica qué integrante/rol representas y cuál es tu tarea asignada.
 
 ## 2. Reglas de Desarrollo Estandarizado
 *   **Gestor de Paquetes**: Utiliza siempre `bun` para ejecutar tareas y añadir dependencias.
@@ -21,4 +20,3 @@ Antes de escribir cualquier línea de código, lee en su totalidad los siguiente
 *   **Lógica Desacoplada**: La lógica de negocio temporal y matemática debe residir estrictamente en funciones puras en `src/lib/attendance-rules.ts`. El cálculo de asistencias debe ser determinista e inyectar `currentTime: Date`.
 *   **Testing de Caja Negra**: Escribe tus pruebas utilizando **Vitest** en archivos `.test.ts`. El objetivo es cubrir el 100% de las Particiones de Equivalencia y Valores Límite diseñados por el Analista de QA. No implementes pruebas visuales de UI.
 *   **Calidad de Código**: Ejecuta `bun run format` y `bun run lint` (utilizando Biome) antes de finalizar tu tarea para mantener el estándar del repositorio.
-
