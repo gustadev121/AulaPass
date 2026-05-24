@@ -1,36 +1,56 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AulaPass (UNSA) - Sistema de Control de Asistencia y Acceso
 
-## Getting Started
+**AulaPass** es un sistema de control de acceso y registro de asistencia diseñado para las aulas de la Universidad Nacional de San Agustín (UNSA), operando como un Tótem de Autoservicio en puerta integrado con un Panel de Administración para el docente. El sistema equilibra la puntualidad con la flexibilidad horaria, la asistencia intergrupo y la permanencia en ambientes de estudio.
 
-First, run the development server:
+---
 
+## 🚀 Stack Tecnológico
+
+*   **Core**: Next.js (App Router, React 19) + TypeScript
+*   **Estilos y Componentes**: Tailwind CSS + Flowbite React (con íconos nativos de Flowbite)
+*   **Persistencia Local**: SQLite + Drizzle ORM (`better-sqlite3`)
+*   **Gestor de Paquetes**: Bun
+*   **Testing**: Vitest (Enfoque exclusivo en pruebas unitarias y de integración de Caja Negra)
+*   **Calidad**: Biome (Linter y Formateador)
+
+---
+
+## 🛠️ Comandos de Ejecución
+
+Asegúrate de tener instalado [Bun](https://bun.sh/) en tu sistema.
+
+### Instalación de dependencias
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+bun install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Ejecutar servidor de desarrollo
+```bash
+bun run dev
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Compilar para producción
+```bash
+bun run build
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+---
 
-## Learn More
+## 📂 Base de Datos (Drizzle)
 
-To learn more about Next.js, take a look at the following resources:
+El sistema utiliza SQLite a nivel transaccional local. Los comandos para gestionar el esquema son:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+*   **Generar migraciones**: `bun run db:generate`
+*   **Ejecutar migraciones**: `bun run db:migrate`
+*   **Sincronizar esquema directamente**: `bun run db:push`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## 🧪 Calidad y Pruebas
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Toda la lógica de negocio se prueba de forma aislada mediante pruebas de caja negra por consola.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+*   **Ejecutar tests unitarios (Vitest)**: `bun run test`
+*   **Ejecutar tests en modo watch**: `bun run test:watch`
+*   **Formatear código (Biome)**: `bun run format`
+*   **Ejecutar linter (Biome)**: `bun run lint`
