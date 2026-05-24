@@ -1,0 +1,160 @@
+import type { ExternalGroup, ExternalStudent } from "./university-service";
+
+export type AttendanceStatus =
+  | "PUNTUAL"
+  | "TARDANZA"
+  | "FALTA"
+  | "AMBIENTE_ESTUDIO";
+export type SwipeType = "ENTRADA" | "SALIDA";
+
+export interface AttendanceRuleInput {
+  currentTime: Date;
+  student: ExternalStudent;
+  activeSession: {
+    id: string;
+    groupId: string;
+    expectedStart: Date;
+    expectedEnd: Date;
+    teacherCheckIn: Date | null;
+    status: "ACTIVE" | "CLOSED" | "SUSPENDED";
+    toleranceType: "STATIC" | "DYNAMIC";
+    toleranceLimit: Date;
+  } | null;
+  currentCourseGroups: ExternalGroup[]; // Todos los grupos del curso dictado en la sesión
+  classroomSchedules: { groupId: string; startTime: Date; endTime: Date }[]; // Horarios del aula del día
+}
+
+export interface AttendanceRuleResult {
+  valid: boolean;
+  swipeType: SwipeType;
+  status: AttendanceStatus;
+  message: string;
+}
+
+// biome-ignore lint/complexity/noStaticOnlyClass: agrupamiento de reglas de negocio en clase estática
+export class AttendanceRulesEngine {
+  /**
+   * Determina el tipo de marcación (ENTRADA o SALIDA) basándose en los registros previos de la sesión.
+   * [RF-09] Alternancia de Flujo de Entrada y Salida
+   */
+  static determineSwipeType(hasCheckedIn: boolean): SwipeType {
+    return hasCheckedIn ? "SALIDA" : "ENTRADA";
+  }
+
+  /**
+   * Evalúa la marcación de un estudiante y calcula su estado (Puntual, Tardanza, Falta, Ambiente de Estudio).
+   * Contiene las reglas principales de negocio: RF-03, RF-04, RF-10 y RF-11.
+   */
+  static evaluateStudentSwipe(
+    input: AttendanceRuleInput,
+    hasCheckedIn: boolean,
+  ): AttendanceRuleResult {
+    const {
+      currentTime,
+      student,
+      activeSession,
+      currentCourseGroups,
+      classroomSchedules,
+    } = input;
+
+    // 1. Alternancia Entrada / Salida (RF-09)
+    const swipeType = AttendanceRulesEngine.determineSwipeType(hasCheckedIn);
+    if (swipeType === "SALIDA") {
+      return {
+        valid: true,
+        swipeType: "SALIDA",
+        status: "AMBIENTE_ESTUDIO", // El estado final de salida se etiqueta de forma neutral o según corresponda
+        message: "Registro de Salida Exitoso.",
+      };
+    }
+
+    // 2. Si no hay sesión activa en curso
+    if (!activeSession) {
+      // Verificar si hay alguna clase programada en el aula en este momento para cualquier grupo
+      const scheduledNow = classroomSchedules.find(
+        (s) => currentTime >= s.startTime && currentTime <= s.endTime,
+      );
+
+      if (!scheduledNow) {
+        // [RF-11] Hora Hueco: No hay clases oficiales programadas
+        return {
+          valid: true,
+          swipeType: "ENTRADA",
+          status: "AMBIENTE_ESTUDIO",
+          message: "Ingreso registrado como Ambiente de Estudio (Hora Hueco).",
+        };
+      }
+
+      // Si hay clase programada pero no se ha iniciado la sesión (el docente no ha marcado)
+      // Nota: El backend usará esta bandera para disparar la autogeneración de sesión de emergencia [RF-05]
+      return {
+        valid: true,
+        swipeType: "ENTRADA",
+        status: "PUNTUAL", // El primer alumno que inicia la sesión de emergencia se considera puntual
+        message: "Sesión no iniciada. Requiere autogeneración de emergencia.",
+      };
+    }
+
+    // 3. Validación de Matrícula y Flexibilidad de Grupo [RF-04]
+    // El estudiante debe estar matriculado en alguno de los grupos del curso dictado en la sesión
+    const isEnrolledInCourse = student.enrolledGroupIds.some((studentGroupId) =>
+      currentCourseGroups.some(
+        (courseGroup) => courseGroup.id === studentGroupId,
+      ),
+    );
+
+    if (!isEnrolledInCourse) {
+      return {
+        valid: false,
+        swipeType: "ENTRADA",
+        status: "FALTA",
+        message: "Error: Alumno no matriculado en este curso.",
+      };
+    }
+
+    // 4. Clasificación de Puntualidad [RF-10] y Tolerancia Dinámica/Estática [RF-07]
+    const toleranceLimit = activeSession.toleranceLimit;
+
+    if (currentTime <= toleranceLimit) {
+      return {
+        valid: true,
+        swipeType: "ENTRADA",
+        status: "PUNTUAL",
+        message: "Ingreso Puntual.",
+      };
+    } else if (currentTime <= activeSession.expectedEnd) {
+      return {
+        valid: true,
+        swipeType: "ENTRADA",
+        status: "TARDANZA",
+        message: "Ingreso con Tardanza.",
+      };
+    } else {
+      return {
+        valid: true,
+        swipeType: "ENTRADA",
+        status: "FALTA",
+        message: "Ingreso Fuera de Hora (Falta).",
+      };
+    }
+  }
+
+  /**
+   * Cierre Automático por Olvido de Marcación de Salida [RF-13]
+   * Devuelve las asistencias modificadas agregando la salida forzada a quienes no marcaron.
+   */
+  static applyAutomaticCheckOuts<
+    T extends { checkOut: string | null; checkOutType: string; status: string },
+  >(attendances: T[], expectedEndTime: Date): T[] {
+    return attendances.map((att) => {
+      if (att.checkOut === null) {
+        return {
+          ...att,
+          checkOut: expectedEndTime.toISOString(),
+          checkOutType: "FORCED_BY_SESSION_CLOSE",
+        };
+      }
+      return att;
+    });
+  }
+}
