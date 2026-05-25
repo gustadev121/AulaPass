@@ -65,7 +65,7 @@ export default function VirtualSwipePage() {
               type="text"
               value={cui}
               onChange={(e) => setCui(e.target.value)}
-              className="w-full text-center text-2xl p-3 border border-gray-300 rounded-xl focus:ring-blue-500 focus:border-blue-500"
+              className="w-full text-gray-700 text-center text-2xl p-3 border border-gray-300 rounded-xl focus:ring-blue-500 focus:border-blue-500"
               placeholder="20210001"
               maxLength={8}
               required
@@ -84,7 +84,7 @@ export default function VirtualSwipePage() {
               type="text"
               value={virtualCode}
               onChange={(e) => setVirtualCode(e.target.value)}
-              className="w-full text-center text-2xl p-3 border border-gray-300 rounded-xl focus:ring-purple-500 focus:border-purple-500 font-mono"
+              className="w-full text-center text-2xl p-3 border text-gray-700 border-gray-300 rounded-xl focus:ring-purple-500 focus:border-purple-500 font-mono"
               placeholder="000000"
               maxLength={6}
               required

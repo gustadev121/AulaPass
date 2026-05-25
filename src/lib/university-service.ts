@@ -5,7 +5,7 @@ export interface ExternalStudent {
 }
 
 export interface ExternalTeacher {
-  cui: string; // DNI o CUI del docente
+  code: string; // DNI o Código del docente
   name: string;
 }
 
@@ -19,7 +19,7 @@ export interface ExternalGroup {
   id: string; // Identificador del grupo, p.ej. "SW-II-A"
   courseId: string;
   courseName: string;
-  teacherCui: string;
+  teacherCode: string;
   schedules: ExternalSchedule[];
 }
 
@@ -37,6 +37,11 @@ const MOCK_STUDENTS: ExternalStudent[] = [
     enrolledGroupIds: ["SW-II-A"],
   },
   {
+    cui: "20210999",
+    name: "Lucía Mamani Choque",
+    enrolledGroupIds: ["DB-I-B"],
+  },
+  {
     cui: "20210002",
     name: "Ana Choque Mamani",
     enrolledGroupIds: ["SW-II-A", "DB-I-B"],
@@ -44,8 +49,8 @@ const MOCK_STUDENTS: ExternalStudent[] = [
 ];
 
 const MOCK_TEACHERS: ExternalTeacher[] = [
-  { cui: "10101010", name: "Dr. Alberto Cáceres" },
-  { cui: "20202020", name: "Mg. Beatriz Llerena" },
+  { code: "10101010", name: "Dr. Alberto Cáceres" },
+  { code: "20202020", name: "Mg. Beatriz Llerena" },
 ];
 
 const MOCK_GROUPS: ExternalGroup[] = [
@@ -53,7 +58,7 @@ const MOCK_GROUPS: ExternalGroup[] = [
     id: "SW-II-A",
     courseId: "INF-301",
     courseName: "Ingeniería de Software II",
-    teacherCui: "10101010",
+    teacherCode: "10101010",
     schedules: [
       { dayOfWeek: 1, startTime: "07:00", endTime: "08:40" }, // Lunes
       { dayOfWeek: 3, startTime: "07:00", endTime: "08:40" }, // Miércoles
@@ -63,17 +68,17 @@ const MOCK_GROUPS: ExternalGroup[] = [
     id: "SW-II-B",
     courseId: "INF-301",
     courseName: "Ingeniería de Software II",
-    teacherCui: "10101010",
+    teacherCode: "10101010",
     schedules: [
-      { dayOfWeek: 1, startTime: "08:50", endTime: "10:30" }, // Lunes
-      { dayOfWeek: 3, startTime: "08:50", endTime: "10:30" }, // Miércoles
+      { dayOfWeek: 1, startTime: "08:50", endTime: "11:00" }, // Lunes
+      { dayOfWeek: 3, startTime: "08:50", endTime: "11:00" }, // Miércoles
     ],
   },
   {
     id: "DB-I-B",
     courseId: "INF-302",
     courseName: "Base de Datos I",
-    teacherCui: "20202020",
+    teacherCode: "20202020",
     schedules: [
       { dayOfWeek: 2, startTime: "14:00", endTime: "15:40" }, // Martes
       { dayOfWeek: 4, startTime: "14:00", endTime: "15:40" }, // Jueves
@@ -95,8 +100,8 @@ export class UniversityService {
   /**
    * Obtiene un profesor por su CUI/DNI
    */
-  static async getTeacherByCui(cui: string): Promise<ExternalTeacher | null> {
-    const teacher = MOCK_TEACHERS.find((t) => t.cui === cui.trim());
+  static async getTeacherByCode(code: string): Promise<ExternalTeacher | null> {
+    const teacher = MOCK_TEACHERS.find((t) => t.code === code.trim());
     return teacher ? { ...teacher } : null;
   }
 
@@ -112,11 +117,13 @@ export class UniversityService {
    * Obtiene todos los grupos que tiene asignados un docente
    */
   static async getGroupsByTeacher(
-    teacherCui: string,
+    teacherCode: string,
   ): Promise<ExternalGroup[]> {
-    return MOCK_GROUPS.filter((g) => g.teacherCui === teacherCui).map((g) => ({
-      ...g,
-    }));
+    return MOCK_GROUPS.filter((g) => g.teacherCode === teacherCode).map(
+      (g) => ({
+        ...g,
+      }),
+    );
   }
 
   /**
@@ -124,13 +131,13 @@ export class UniversityService {
    * Devuelve todos los grupos que tienen sesiones asignadas en el salón, junto con su horario.
    */
   static async getClassroomSchedule(): Promise<
-    { groupId: string; schedule: ExternalSchedule }[]
+    { group: ExternalGroup; schedule: ExternalSchedule }[]
   > {
-    const results: { groupId: string; schedule: ExternalSchedule }[] = [];
+    const results: { group: ExternalGroup; schedule: ExternalSchedule }[] = [];
     for (const group of MOCK_GROUPS) {
       for (const schedule of group.schedules) {
         results.push({
-          groupId: group.id,
+          group: { ...group },
           schedule: { ...schedule },
         });
       }

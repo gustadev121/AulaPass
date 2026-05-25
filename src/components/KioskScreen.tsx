@@ -7,7 +7,7 @@ import { identifierSchema } from "../lib/validations";
 type ScreenState = "IDLE" | "GREEN" | "AMBER" | "BLUE" | "RED";
 
 interface Teacher {
-  cui: string;
+  code: string;
   name: string;
 }
 
@@ -20,7 +20,7 @@ export default function KioskScreen({
   const [screenState, setScreenState] = useState<ScreenState>("IDLE");
   const [message, setMessage] = useState("Ingrese su CUI o DNI");
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
-  const [loginCui, setLoginCui] = useState("");
+  const [loginCode, setLoginCode] = useState("");
   const [loginError, setLoginError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const loginInputRef = useRef<HTMLInputElement>(null);
@@ -122,7 +122,7 @@ export default function KioskScreen({
       const response = await fetch("/api/kiosk/swipe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ DniCui: loginCui }),
+        body: JSON.stringify({ DniCui: loginCode }),
       });
 
       const data = await response.json();
@@ -181,17 +181,17 @@ export default function KioskScreen({
             <form onSubmit={handleTeacherLogin} className="space-y-4">
               <div>
                 <label
-                  htmlFor="teacher-cui"
+                  htmlFor="teacher-code"
                   className="block text-sm font-medium text-gray-700"
                 >
                   CUI o DNI del Docente
                 </label>
                 <input
-                  id="teacher-cui"
+                  id="teacher-code"
                   ref={loginInputRef}
                   type="text"
-                  value={loginCui}
-                  onChange={(e) => setLoginCui(e.target.value)}
+                  value={loginCode}
+                  onChange={(e) => setLoginCode(e.target.value)}
                   className="mt-1 block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 text-2xl p-3"
                   placeholder="12345678"
                 />

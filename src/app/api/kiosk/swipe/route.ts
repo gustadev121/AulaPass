@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
     const dateString = now.toISOString().split("T")[0]; // YYYY-MM-DD
 
     // 1. Verificar si es Docente (RF-06)
-    const teacher = await UniversityService.getTeacherByCui(DniCui);
+    const teacher = await UniversityService.getTeacherByCode(DniCui);
     if (teacher) {
       // Buscar si el docente tiene una clase programada en el aula en este bloque
       const classroomSchedules = await UniversityService.getClassroomSchedule();
@@ -70,10 +70,9 @@ export async function POST(request: NextRequest) {
       let matchedSchedule = null;
 
       for (const item of classroomSchedules) {
-        const group = await UniversityService.getGroupById(item.groupId);
+        const group = item.group;
         if (
-          group &&
-          group.teacherCui === teacher.cui &&
+          group.teacherCode === teacher.code &&
           item.schedule.dayOfWeek === mappedDay
         ) {
           const { expectedStart, expectedEnd } = getDatesForSchedule(
@@ -137,6 +136,7 @@ export async function POST(request: NextRequest) {
             color: "BLUE",
             role: "TEACHER",
             name: teacher.name,
+            code: teacher.code,
             message: `Bienvenido docente ${teacher.name}. Asistencia ya registrada previamente.`,
           });
         }
@@ -190,10 +190,10 @@ export async function POST(request: NextRequest) {
         color: "BLUE",
         role: "TEACHER",
         name: teacher.name,
+        code: teacher.code,
         message: `Asistencia del docente ${teacher.name} registrada con éxito. Clase iniciada.`,
       });
     }
-
     // 2. Verificar si es Estudiante (RF-04)
     const student = await UniversityService.getStudentByCui(DniCui);
     if (student) {
@@ -216,12 +216,58 @@ export async function POST(request: NextRequest) {
       recentStudentSwipes.set(student.cui, now.getTime());
 
       // Buscar si existe una sesión de clase activa en la base de datos local
-      const activeSession = await db
+      let activeSession: any = await db
         .select()
         .from(sessions)
         .where(eq(sessions.status, "ACTIVE"))
         .limit(1)
         .then((res) => res[0]);
+
+      if (
+        activeSession &&
+        now.getTime() > new Date(activeSession.expectedEnd).getTime()
+      ) {
+        // [RF-13] Cierre automático forzado en el siguiente swipe si la sesión expiró
+        await db
+          .update(sessions)
+          .set({ status: "CLOSED" })
+          .where(eq(sessions.id, activeSession.id));
+
+        const openAttendances = await db
+          .select()
+          .from(attendances)
+          .where(
+            and(
+              eq(attendances.sessionId, activeSession.id),
+              isNull(attendances.checkOut),
+            ),
+          );
+
+        const expectedEndTime = new Date(activeSession.expectedEnd);
+        const forcedAttendances = AttendanceRulesEngine.applyAutomaticCheckOuts(
+          openAttendances.map((att) => ({
+            id: att.id,
+            checkOut: att.checkOut,
+            checkOutType: att.checkOutType as any,
+            status: att.status as any,
+          })),
+          expectedEndTime,
+        );
+
+        for (const forced of forcedAttendances) {
+          if (forced.checkOut) {
+            await db
+              .update(attendances)
+              .set({
+                checkOut: forced.checkOut,
+                checkOutType: "FORCED_BY_SESSION_CLOSE",
+              })
+              .where(eq(attendances.id, forced.id));
+          }
+        }
+
+        activeSession = undefined;
+      }
 
       if (activeSession) {
         // Obtener el grupo activo y todos los grupos del curso para tolerancia de grupo intergrupo (RF-04)
@@ -240,16 +286,12 @@ export async function POST(request: NextRequest) {
         }
 
         // Obtener todos los horarios y grupos programados para el curso
-        // En nuestro mock de UNSA, podemos simular recuperar los grupos del mismo curso
-        // Filtramos MOCK_GROUPS indirectamente de forma simulada buscando grupos con el mismo courseId
-        // Para lograrlo, consultamos todos los grupos del aula y verificamos cuáles comparten el mismo courseId
         const classroomSchedules =
           await UniversityService.getClassroomSchedule();
         const courseGroups = [];
         for (const item of classroomSchedules) {
-          const g = await UniversityService.getGroupById(item.groupId);
-          if (g && g.courseId === activeGroup.courseId) {
-            courseGroups.push(g);
+          if (item.group.courseId === activeGroup.courseId) {
+            courseGroups.push(item.group);
           }
         }
 
@@ -312,7 +354,7 @@ export async function POST(request: NextRequest) {
             item.schedule.endTime,
           );
           return {
-            groupId: item.groupId,
+            groupId: item.group.id,
             startTime: expectedStart,
             endTime: expectedEnd,
           };
@@ -385,10 +427,6 @@ export async function POST(request: NextRequest) {
       let matchedSchedule = null;
       let matchedGroup = null;
 
-      console.log(
-        `[DEBUG] Attempting to match schedule for student ${DniCui}, total schedules: ${classroomSchedules.length}, mappedDay: ${mappedDay}`,
-      );
-
       for (const item of classroomSchedules) {
         if (item.schedule.dayOfWeek === mappedDay) {
           const { expectedStart, expectedEnd } = getDatesForSchedule(
@@ -399,36 +437,27 @@ export async function POST(request: NextRequest) {
           const earliestStart = new Date(
             expectedStart.getTime() - 30 * 60 * 1000,
           );
-          console.log(
-            `[DEBUG] Comparing schedule ${item.schedule.startTime}-${item.schedule.endTime}, earliestStart: ${earliestStart.toISOString()}, expectedEnd: ${expectedEnd.toISOString()}, now: ${now.toISOString()}`,
-          );
+
           if (now >= earliestStart && now <= expectedEnd) {
             // Verificar si el estudiante está matriculado en esta asignatura
-            const group = await UniversityService.getGroupById(item.groupId);
-            if (group) {
-              // Obtener todos los grupos de la misma asignatura
-              const courseGroups: ExternalGroup[] = [];
-              for (const scheduleItem of classroomSchedules) {
-                const g = await UniversityService.getGroupById(
-                  scheduleItem.groupId,
-                );
-                if (g && g.courseId === group.courseId) {
-                  courseGroups.push(g);
-                }
-              }
+            const group = item.group;
 
-              const isEnrolled = student.enrolledGroupIds.some((sgid) =>
-                courseGroups.some((cg) => cg.id === sgid),
-              );
-              console.log(
-                `[DEBUG] Student: ${student.cui}, isEnrolled: ${isEnrolled}, studentGroups: ${JSON.stringify(student.enrolledGroupIds)}, courseGroups: ${JSON.stringify(courseGroups.map((g) => g.id))}`,
-              );
-
-              if (isEnrolled) {
-                matchedSchedule = item.schedule;
-                matchedGroup = group;
-                break;
+            // Obtener todos los grupos de la misma asignatura
+            const courseGroups: ExternalGroup[] = [];
+            for (const scheduleItem of classroomSchedules) {
+              if (scheduleItem.group.courseId === group.courseId) {
+                courseGroups.push(scheduleItem.group);
               }
+            }
+
+            const isEnrolled = student.enrolledGroupIds.some((sgid) =>
+              courseGroups.some((cg) => cg.id === sgid),
+            );
+
+            if (isEnrolled) {
+              matchedSchedule = item.schedule;
+              matchedGroup = group;
+              break;
             }
           }
         }
@@ -586,6 +615,7 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   } catch (error) {
+    console.error(error);
     // RNF-01: Robustez ante fallos
     return NextResponse.json(
       {

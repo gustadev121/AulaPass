@@ -114,3 +114,5 @@ Este documento contiene el catálogo exhaustivo y definitivo de casos de prueba 
 | TC-8.04 | Rendimiento de Procesamiento (1ms antes del umbral) | RNF-02 | Tiempo total de respuesta de 149 milisegundos. | Procesado validado exitosamente dentro del margen esperado. | AVL |
 | TC-8.05 | Rendimiento de Procesamiento (Límite exacto de umbral) | RNF-02 | Tiempo total de respuesta de 150 milisegundos. | Procesado validado exitosamente (en el límite exigido). | AVL |
 | TC-8.06 | Rendimiento de Procesamiento (1ms después del umbral) | RNF-02 | Tiempo total de respuesta de 151 milisegundos. | Supera el umbral. Ejecución del manejador de timeout/advertencia si aplica, o registro en logs. | AVL |
+imiento de Procesamiento (1ms después del umbral) | RNF-02 | Tiempo total de respuesta de 151 milisegundos. | Supera el umbral. Ejecución del manejador de timeout/advertencia si aplica, o registro en logs. | AVL |
+| TC-6.08 | Marcación física detona cierre automático diferido | Sesión expirada y alumno marca. | El sistema cierra la sesión expirada, realiza auto-checkouts, y procesa la nueva marcación. | AVL/PE |

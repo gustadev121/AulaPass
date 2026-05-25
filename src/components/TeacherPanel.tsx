@@ -28,14 +28,14 @@ interface Group {
   id: string;
   courseId: string;
   courseName: string;
-  teacherCui: string;
+  teacherCode: string;
   name?: string;
   classroom?: string;
 }
 
 interface TeacherPanelProps {
   teacherData: {
-    cui: string;
+    code: string;
     name: string;
   };
   onLogout: () => void;
@@ -124,7 +124,7 @@ export default function TeacherPanel({
           sessionId: activeSession.id,
           newStatus,
           reason: "Corrección manual por docente",
-          actorCui: teacherData.cui,
+          actorCode: teacherData.code,
         }),
       });
       const data = await response.json();
@@ -159,7 +159,7 @@ export default function TeacherPanel({
           studentCui,
           sessionId: activeSession.id,
           reason: "Anulación manual por docente",
-          actorCui: teacherData.cui,
+          actorCode: teacherData.code,
         }),
       });
       const data = await response.json();
@@ -197,7 +197,7 @@ export default function TeacherPanel({
           sessionId: activeSession.id,
           newStatus,
           reason: newReason,
-          actorCui: teacherData.cui,
+          actorCode: teacherData.code,
         }),
       });
       const data = await response.json();
@@ -222,7 +222,7 @@ export default function TeacherPanel({
     }
     if (
       !confirm(
-        "¿Está seguro de cerrar la sesión? Se registrará la salida automática de los alumnos.",
+        "¿Está seguro de FINALIZAR la clase? \n\nEsto cerrará el registro de asistencia y marcará la salida automática de los alumnos presentes. \n\nSi solo desea salir del panel sin terminar la clase, use 'Volver al Kiosko'.",
       )
     )
       return;
@@ -281,20 +281,31 @@ export default function TeacherPanel({
             <p className="text-blue-600 font-semibold mt-2">{message}</p>
           )}
         </div>
-        <button
-          type="button"
-          onClick={handleCloseSession}
-          className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
-        >
-          Cerrar Sesión
-        </button>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={onLogout}
+            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium"
+            title="Regresa a la pantalla principal sin terminar la clase actual"
+          >
+            Volver al Kiosko
+          </button>
+          <button
+            type="button"
+            onClick={handleCloseSession}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium"
+            title="Finaliza la clase actual y registra la salida de todos los alumnos"
+          >
+            Finalizar Clase
+          </button>
+        </div>
       </header>
 
       <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         {/* Tarjeta de Configuración de Tolerancia (RF-07) */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 col-span-1">
           <h2 className="text-lg font-semibold mb-4 text-gray-700">
-            Configuración de Sesión
+            Ajustes de Tolerancia y Sesión
           </h2>
           <div className="space-y-4">
             <div>
@@ -302,7 +313,7 @@ export default function TeacherPanel({
                 htmlFor="tolerance-mode"
                 className="block text-sm font-medium text-gray-700 mb-2"
               >
-                Modo de Tolerancia
+                Criterio de Tolerancia
               </label>
               <select
                 id="tolerance-mode"
@@ -321,7 +332,7 @@ export default function TeacherPanel({
                 htmlFor="tolerance-minutes"
                 className="block text-sm font-medium text-gray-700 mb-2"
               >
-                Minutos de Tolerancia
+                Minutos Permitidos
               </label>
               <input
                 id="tolerance-minutes"
@@ -340,7 +351,7 @@ export default function TeacherPanel({
               onClick={handleUpdateConfig}
               className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition"
             >
-              Guardar Configuración
+              Aplicar Ajustes
             </button>
           </div>
         </div>
@@ -373,22 +384,23 @@ export default function TeacherPanel({
           </div>
           <div className="border-l pl-6">
             <p className="text-sm text-gray-500 uppercase tracking-wide">
-              Contingencia
+              Modo Contingencia
             </p>
             {activeSession?.virtualCode ? (
               <div className="mt-2">
                 <p className="text-2xl font-mono font-bold text-purple-600">
                   {activeSession.virtualCode}
                 </p>
-                <p className="text-xs text-gray-400">Código Virtual Activo</p>
+                <p className="text-xs text-gray-400">Código de Acceso Remoto</p>
               </div>
             ) : (
               <button
                 type="button"
                 onClick={handleActivateVirtual}
-                className="mt-2 px-4 py-1 text-sm border border-purple-600 text-purple-600 rounded-md hover:bg-purple-50"
+                className="mt-2 px-4 py-1 text-sm border border-purple-600 text-purple-600 rounded-md hover:bg-purple-50 font-medium"
+                title="Habilita un código para que los alumnos marquen asistencia desde sus dispositivos si el QR físico falla"
               >
-                Activar QR (Virtual)
+                Habilitar Código Virtual
               </button>
             )}
           </div>
@@ -397,7 +409,7 @@ export default function TeacherPanel({
         {/* Alta rápida de asistencia manual (RF-14) */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 col-span-1 md:col-span-3">
           <h2 className="text-lg font-semibold mb-4 text-gray-700">
-            Añadir Alumno Ausente
+            Registro Manual de Asistencia (Excepción/Contingencia)
           </h2>
           <form
             onSubmit={handleCreateAttendance}
@@ -407,7 +419,7 @@ export default function TeacherPanel({
               type="text"
               value={newStudentCui}
               onChange={(e) => setNewStudentCui(e.target.value)}
-              placeholder="CUI (8 dígitos)"
+              placeholder="CUI del Alumno (8 dígitos)"
               className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
               maxLength={8}
               required
@@ -419,24 +431,24 @@ export default function TeacherPanel({
               }
               className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
             >
-              <option value="PUNTUAL">Puntual</option>
+              <option value="PUNTUAL">Presente (Puntual)</option>
               <option value="TARDANZA">Tardanza</option>
               <option value="FALTA">Falta</option>
-              <option value="AMBIENTE_ESTUDIO">Ambiente Estudio</option>
+              <option value="AMBIENTE_ESTUDIO">Ambiente de Estudio</option>
             </select>
             <input
               type="text"
               value={newReason}
               onChange={(e) => setNewReason(e.target.value)}
-              placeholder="Motivo"
+              placeholder="Justificación del registro manual"
               className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
               required
             />
             <button
               type="submit"
-              className="w-full bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700 transition"
+              className="w-full bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700 transition font-medium"
             >
-              Añadir Registro
+              Registrar Asistencia
             </button>
           </form>
         </div>
@@ -446,19 +458,19 @@ export default function TeacherPanel({
       <section className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
           <h2 className="text-lg font-semibold text-gray-700">
-            Registro de Marcaciones
+            Control Detallado de Asistencia
           </h2>
           <div className="flex space-x-2">
             <button
               type="button"
               onClick={fetchSessionData}
-              className="text-sm text-blue-600 hover:underline"
+              className="text-sm text-blue-600 hover:underline font-medium"
             >
-              Actualizar Tabla
+              Refrescar Lista
             </button>
             <input
               type="text"
-              placeholder="Buscar CUI o Nombre..."
+              placeholder="Filtrar por CUI o Nombre..."
               className="border-gray-300 rounded-lg text-sm"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -470,10 +482,10 @@ export default function TeacherPanel({
             <thead className="bg-gray-100 text-gray-700 uppercase font-semibold">
               <tr>
                 <th className="px-6 py-4">CUI</th>
-                <th className="px-6 py-4">Nombre</th>
-                <th className="px-6 py-4">Hora Ingreso</th>
+                <th className="px-6 py-4">Estudiante</th>
+                <th className="px-6 py-4">Hora de Registro</th>
                 <th className="px-6 py-4">Estado Actual</th>
-                <th className="px-6 py-4">Acción / Corrección</th>
+                <th className="px-6 py-4">Acciones de Corrección</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -483,7 +495,7 @@ export default function TeacherPanel({
                     {record.studentCui}
                   </td>
                   <td className="px-6 py-4 text-gray-600">
-                    {record.name || "Cargando..."}
+                    {record.name || "Sin nombre registrado"}
                   </td>
                   <td className="px-6 py-4">
                     {new Date(record.checkIn).toLocaleTimeString()}
@@ -515,12 +527,13 @@ export default function TeacherPanel({
                           )
                         }
                         className="text-sm border-gray-300 rounded shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                        title="Cambiar estado de asistencia manualmente"
                       >
                         <option value="PUNTUAL">Puntual</option>
                         <option value="TARDANZA">Tardanza</option>
                         <option value="FALTA">Falta</option>
                         <option value="AMBIENTE_ESTUDIO">
-                          Ambiente Estudio
+                          Ambiente de Estudio
                         </option>
                       </select>
                       <button
@@ -528,9 +541,10 @@ export default function TeacherPanel({
                         onClick={() =>
                           handleDeleteAttendance(record.studentCui, record.name)
                         }
-                        className="text-sm text-red-600 hover:underline"
+                        className="text-sm text-red-600 hover:underline font-medium"
+                        title="Eliminar este registro de asistencia permanentemente"
                       >
-                        Eliminar
+                        Anular
                       </button>
                     </div>
                   </td>
@@ -542,7 +556,8 @@ export default function TeacherPanel({
                     colSpan={5}
                     className="px-6 py-8 text-center text-gray-500"
                   >
-                    No se encontraron marcaciones.
+                    No se encontraron marcaciones para los criterios de
+                    búsqueda.
                   </td>
                 </tr>
               )}

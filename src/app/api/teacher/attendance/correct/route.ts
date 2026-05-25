@@ -15,23 +15,23 @@ type OperationType = "UPDATE" | "DELETE" | "CREATE";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { studentCui, sessionId, newStatus, reason, actorCui, operation } =
+    const { studentCui, sessionId, newStatus, reason, actorCode, operation } =
       body as {
         studentCui?: string;
         sessionId?: string;
         newStatus?: AttendanceStatus;
         reason?: string;
-        actorCui?: string;
+        actorCode?: string;
         operation?: OperationType;
       };
 
     // Validación básica de parámetros
-    if (!studentCui || !sessionId || !reason || !actorCui) {
+    if (!studentCui || !sessionId || !reason || !actorCode) {
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Parámetros incompletos. Se requiere: studentCui, sessionId, reason, actorCui.",
+          error:
+            "Parámetros incompletos. Se requiere: studentCui, sessionId, reason, actorCode.",
         },
         { status: 400 },
       );
@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
       await db.insert(auditLogs).values({
         id: crypto.randomUUID(),
         sessionId,
-        actorCui,
+        actorCode,
         studentCui,
         originalStatus,
         newStatus: newStatus as AttendanceStatus,
@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
       await db.insert(auditLogs).values({
         id: crypto.randomUUID(),
         sessionId,
-        actorCui,
+        actorCode,
         studentCui,
         originalStatus,
         newStatus: "ANULADO",
@@ -175,7 +175,7 @@ export async function POST(request: NextRequest) {
     await db.insert(auditLogs).values({
       id: crypto.randomUUID(),
       sessionId,
-      actorCui,
+      actorCode,
       studentCui,
       originalStatus: "INEXISTENTE",
       newStatus: newStatus as AttendanceStatus,
@@ -188,6 +188,7 @@ export async function POST(request: NextRequest) {
       message: `Asistencia añadida manualmente como ${newStatus} y registrada en auditoría.`,
     });
   } catch (error) {
+    console.error("[Correct Route Error]:", error);
     return NextResponse.json(
       {
         success: false,

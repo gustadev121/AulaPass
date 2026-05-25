@@ -41,7 +41,7 @@ export const auditLogs = sqliteTable("audit_logs", {
   sessionId: text("session_id")
     .notNull()
     .references(() => sessions.id),
-  actorCui: text("actor_cui").notNull(), // CUI del docente/admin que realiza la modificación
+  actorCode: text("actor_cui").notNull(), // Código del docente/admin que realiza la modificación
   studentCui: text("student_cui").notNull(), // CUI del alumno modificado
   originalStatus: text("original_status").notNull(),
   newStatus: text("new_status").notNull(),

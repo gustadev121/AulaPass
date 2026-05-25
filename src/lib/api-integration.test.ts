@@ -422,7 +422,7 @@ describe("API Integration Tests - Módulos 1, 2, 3, 4, 5, 6, 8", () => {
               sessionId,
               newStatus: "PUNTUAL",
               reason: "Registro manual en clase virtual",
-              actorCui: "10101010",
+              actorCode: "10101010",
             }),
           });
           const json = await res.json();
@@ -440,6 +440,84 @@ describe("API Integration Tests - Módulos 1, 2, 3, 4, 5, 6, 8", () => {
   });
 
   describe("Módulo 6: Cierre Automático y Auditoría (RF-13, RF-14)", () => {
+    // TC-6.08: Marcación física detona cierre automático diferido
+    it("debe detonar cierre automático diferido y procesar nuevo swipe (TC-6.08)", async () => {
+      // Sesión expirada (SW-II-A, termina a las 08:40, pero sigue "ACTIVE")
+      const sessionId = crypto.randomUUID();
+      const expectedStart = new Date(2026, 4, 25, 7, 0);
+      const expectedEnd = new Date(2026, 4, 25, 8, 40);
+      const toleranceLimit = new Date(2026, 4, 25, 7, 15);
+
+      await db.insert(sessions).values({
+        id: sessionId,
+        groupId: "SW-II-A",
+        date: "2026-05-25",
+        expectedStart: expectedStart.toISOString(),
+        expectedEnd: expectedEnd.toISOString(),
+        status: "ACTIVE",
+        toleranceType: "STATIC",
+        toleranceLimit: toleranceLimit.toISOString(),
+      });
+
+      const checkInTime = new Date(2026, 4, 25, 7, 5);
+      await db.insert(attendances).values({
+        id: crypto.randomUUID(),
+        studentCui: "20201234",
+        sessionId,
+        checkIn: checkInTime.toISOString(),
+        status: "PUNTUAL",
+      });
+
+      // Ana Choque (20210002) marca a las 10:20 (durante SW-II-B, que es 08:50-10:30)
+      const mockTimeStr = new Date(2026, 4, 25, 10, 20).toISOString();
+
+      await testApiHandler({
+        appHandler: swipeRoute,
+        async test({ fetch }) {
+          const res = await fetch({
+            method: "POST",
+            body: JSON.stringify({
+              DniCui: "20210002",
+              mockTime: mockTimeStr,
+            }),
+          });
+          const json = await res.json();
+
+          expect(res.status).toBe(200);
+          expect(json.success).toBe(true);
+
+          // Verificar que la sesión vieja se cerró
+          const oldSession = await db
+            .select()
+            .from(sessions)
+            .where(eq(sessions.id, sessionId));
+          expect(oldSession[0].status).toBe("CLOSED");
+
+          // Verificar que hubo auto-checkout para Juan
+          const oldAtt = await db
+            .select()
+            .from(attendances)
+            .where(eq(attendances.sessionId, sessionId));
+          expect(oldAtt[0].checkOutType).toBe("FORCED_BY_SESSION_CLOSE");
+
+          // Verificar que se creó una sesión nueva para SW-II-B
+          const newSessions = await db
+            .select()
+            .from(sessions)
+            .where(eq(sessions.status, "ACTIVE"));
+          expect(newSessions.length).toBe(1);
+          expect(newSessions[0].groupId).toBe("SW-II-B");
+
+          // Verificar que la asistencia de Ana se registró en la nueva sesión
+          const anaAtt = await db
+            .select()
+            .from(attendances)
+            .where(eq(attendances.studentCui, "20210002"));
+          expect(anaAtt.length).toBe(1);
+        },
+      });
+    });
+
     // TC-6.03: Cierre Automático forzado
     it("debe forzar la salida de alumnos al cerrar la sesión (TC-6.03)", async () => {
       const sessionId = crypto.randomUUID();
@@ -514,7 +592,7 @@ describe("API Integration Tests - Módulos 1, 2, 3, 4, 5, 6, 8", () => {
               sessionId,
               newStatus: "PUNTUAL",
               reason: "Olvido de carnet",
-              actorCui: "10101010",
+              actorCode: "10101010",
             }),
           });
           const json = await res.json();
@@ -565,7 +643,7 @@ describe("API Integration Tests - Módulos 1, 2, 3, 4, 5, 6, 8", () => {
               studentCui: "20201234",
               sessionId,
               reason: "Registro duplicado",
-              actorCui: "10101010",
+              actorCode: "10101010",
             }),
           });
           const json = await res.json();
@@ -607,7 +685,7 @@ describe("API Integration Tests - Módulos 1, 2, 3, 4, 5, 6, 8", () => {
               sessionId,
               newStatus: "FALTA",
               reason: "Registro manual por contingencia",
-              actorCui: "10101010",
+              actorCode: "10101010",
             }),
           });
           const json = await res.json();

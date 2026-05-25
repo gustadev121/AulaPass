@@ -84,9 +84,8 @@ export async function POST(request: NextRequest) {
     const classroomSchedules = await UniversityService.getClassroomSchedule();
     const courseGroups = [];
     for (const item of classroomSchedules) {
-      const g = await UniversityService.getGroupById(item.groupId);
-      if (g && activeGroup && g.courseId === activeGroup.courseId) {
-        courseGroups.push(g);
+      if (activeGroup && item.group.courseId === activeGroup.courseId) {
+        courseGroups.push(item.group);
       }
     }
 
@@ -97,7 +96,7 @@ export async function POST(request: NextRequest) {
       const [startH, startM] = item.schedule.startTime.split(":").map(Number);
       const [endH, endM] = item.schedule.endTime.split(":").map(Number);
       return {
-        groupId: item.groupId,
+        groupId: item.group.id,
         startTime: new Date(year, month, date, startH, startM),
         endTime: new Date(year, month, date, endH, endM),
       };

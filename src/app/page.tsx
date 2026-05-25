@@ -5,7 +5,7 @@ import KioskScreen from "@/components/KioskScreen";
 import TeacherPanel from "@/components/TeacherPanel";
 
 interface Teacher {
-  cui: string;
+  code: string;
   name: string;
 }
 
