@@ -8,11 +8,7 @@ const nextConfig: NextConfig = {
     if (dev && !isServer) {
       config.watchOptions = {
         ...config.watchOptions,
-        ignored: [
-          "**/.direnv/**",
-          "**/node_modules/**",
-          "**/.next/**",
-        ],
+        ignored: ["**/.direnv/**", "**/node_modules/**", "**/.next/**"],
       };
     }
     return config;

@@ -45,7 +45,6 @@ Este documento contiene el catálogo exhaustivo y definitivo de casos de prueba 
 | TC-3.07 | Llegada de docente tras límite de suspensión (Intento reapertura) | RF-08 | Sesión ya suspendida. Docente marca en T = 20m 02s. | El sistema rechaza la marcación del docente y mantiene la sesión como clausurada. | AVL |
 | TC-3.08 | Tolerancia Dinámica Automática por Llegada Tardía Docente | RF-07, 10 | Docente llega tarde (Ej: T=09:10 para clase 08:50). Alumno llega a T=09:11. | El sistema activa automáticamente la modalidad dinámica. Alumno marcado como **PUNTUAL** (dentro de los 15 min de tolerancia dinámica). | PE |
 
-
 ## Módulo 4: Flujos de Permanencia, Salida y Horas Hueco
 
 *(Nota: Horario ficticio de Clase Inicia = 08:00:00, Tolerancia Máxima = 15 min, Cierre = 09:30:00)*
@@ -65,7 +64,6 @@ Este documento contiene el catálogo exhaustivo y definitivo de casos de prueba 
 | TC-4.11 | Tolerancia Dinámica: Límite recalcula exacto | RF-07, 10 | Límite desplazado a 08:20:00. Alumno marca a las 08:20:00. | Clasificado como **PUNTUAL**. | AVL |
 | TC-4.12 | Tolerancia Dinámica: Tardanza (1 seg post límite recalculado) | RF-07, 10 | Límite desplazado a 08:20:00. Alumno marca a las 08:20:01. | Clasificado como **TARDANZA**. | AVL |
 | TC-4.13 | Uso de aula en bloque sin programación académica | RF-11 | Horario libre en sistema oficial. Alumno marca ingreso. | Estado neutral asignado: Entrada a **Ambiente de Estudio**. | PE |
-
 | TC-4.14 | Llegada excesivamente temprana a clase futura | RF-11 | Clase inicia a las 10:00. Alumno ingresa a las 08:45. | Estado neutral asignado: Entrada a **Ambiente de Estudio**. | PE |
 | TC-4.15 | Alternancia Entrada/Salida en Hora Hueco | RF-09, 11 | Alumno con registro previo de "Ambiente de Estudio" vuelve a marcar en el bloque libre. | Estado neutral asignado: Salida de **Ambiente de Estudio**. | PE |
 | TC-4.16 | Day Rollover (Reinicio diario de historial de flujos) | RF-09 | Alumno marca Entrada a las 23:50 (día 1) sin marcar Salida. Marca el día 2 a las 08:00. | La marca del día 2 se registra como una nueva **Entrada**, reiniciando el flujo diario. | PE |
@@ -84,6 +82,7 @@ Este documento contiene el catálogo exhaustivo y definitivo de casos de prueba 
 | TC-5.05 | Modificación manual autorizada: Alteración de estado | RF-13 | Panel docente. Se cambia estado de Falta a Tardanza. | Cambio guardado en BD. Se inserta un registro en el log de auditoría. | PE |
 | TC-5.06 | Modificación manual autorizada: Anulación de registro | RF-13 | Panel docente. Se anula una marcación previa. | Marca eliminada/invalidada. Se inserta un registro en el log de auditoría. | PE |
 | TC-5.07 | Modificación manual autorizada: Añadir nuevo registro | RF-13 | Panel docente. El profesor inserta a un alumno sin marcas previas en el día. | Registro de asistencia creado exitosamente desde cero en la BD con su log de auditoría. | PE |
+| TC-5.08 | Marcación física detona cierre automático diferido | Sesión expirada y alumno marca. | El sistema cierra la sesión expirada, realiza auto-checkouts, y procesa la nueva marcación. | AVL/PE |
 
 ## Módulo 6: Respuesta Visual en Pantalla
 
@@ -104,10 +103,16 @@ Este documento contiene el catálogo exhaustivo y definitivo de casos de prueba 
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | TC-7.01 | Sobrecarga de longitud en input | RNF-01 | Input recibe un string numérico de 1000 caracteres. | Procesamiento truncado/rechazado seguro. Muestra pantalla de error sin caída (crash). | PE |
 | TC-7.02 | Doble marcación por concurrencia extrema | RNF-01 | Mismo ID se envía 2 veces en menos de 50 milisegundos. | Resuelve concurrencia descartando la duplicidad (Error 429). | PE |
-
 | TC-7.03 | Inaccesibilidad del servicio mock universitario | RNF-01 | API mock `university-service` no responde o falla. | Sistema captura excepción, muestra notificación roja y se recupera de inmediato. | PE |
 | TC-7.04 | Rendimiento de Procesamiento (1ms antes del umbral) | RNF-02 | Tiempo total de respuesta de 149 milisegundos. | Procesado validado exitosamente dentro del margen esperado. | AVL |
 | TC-7.05 | Rendimiento de Procesamiento (Límite exacto de umbral) | RNF-02 | Tiempo total de respuesta de 150 milisegundos. | Procesado validado exitosamente (en el límite exigido). | AVL |
 | TC-7.06 | Rendimiento de Procesamiento (1ms después del umbral) | RNF-02 | Tiempo total de respuesta de 151 milisegundos. | Supera el umbral. Ejecución del manejador de timeout/advertencia si aplica, o registro en logs. | AVL |
-| TC-5.08 | Marcación física detona cierre automático diferido | Sesión expirada y alumno marca. | El sistema cierra la sesión expirada, realiza auto-checkouts, y procesa la nueva marcación. | AVL/PE |
 
+## Módulo 9: Flexibilidad de Asistencia por Curso
+
+| ID Caso | Descripción | Requerimiento | Datos de Entrada / Estado | Resultado Esperado | Técnica |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| TC-9.01 | Eliminar falta previa al asistir a otra sesión del curso | RF-Flexible | Alumno con FALTA en Sesión 1. Asiste a Sesión 2 del mismo curso en la misma semana. | La falta de la Sesión 1 es eliminada automáticamente. | PE |
+| TC-9.02 | No marcar falta si ya asistió a otra sesión del curso | RF-Flexible | Alumno asistió a Sesión 1. No asiste a Sesión 2 en la misma semana. Cierre de Sesión 2. | El sistema no registra falta para la Sesión 2. | PE |
+| TC-9.03 | Mantener faltas si no asistió a ninguna sesión del curso | RF-Flexible | Alumno no asiste a ninguna sesión del curso en la semana. | Se registran faltas para todas las sesiones no asistidas. | PE |
+| TC-9.04 | Flexibilidad en sesión suspendida por docente | RF-Flexible | Sesión suspendida. Alumno ya asistió a otra sesión del curso esa semana. | El alumno no es marcado con FALTA por la sesión suspendida. | PE |

@@ -3,12 +3,12 @@ import { testApiHandler } from "next-test-api-route-handler";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/db";
 import { attendances, auditLogs, sessions } from "@/db/schema";
+import { SessionService } from "@/lib/session-service";
 import { UniversityService } from "@/lib/university-service";
 import * as swipeRoute from "../app/api/kiosk/swipe/route";
 import * as correctAttendanceRoute from "../app/api/teacher/attendance/correct/route";
 import * as teacherLoginRoute from "../app/api/teacher/login/route";
 import * as checkAbsenceRoute from "../app/api/teacher/session/check-absence/route";
-import * as closeSessionRoute from "../app/api/teacher/session/close/route";
 
 describe("API Integration Tests - Módulos 1, 2, 3, 4, 6, 8", () => {
   beforeEach(async () => {
@@ -336,6 +336,88 @@ describe("API Integration Tests - Módulos 1, 2, 3, 4, 6, 8", () => {
       });
     });
 
+    // TC-3.08: Cierre automático por expiración de tiempo (RF-10, RF-13)
+    it("debe cerrar la sesión y marcar faltas automáticamente cuando el tiempo expira (TC-3.08)", async () => {
+      const sessionId = crypto.randomUUID();
+      const expectedEnd = "2026-05-25T08:40:00.000Z";
+
+      await db.insert(sessions).values({
+        id: sessionId,
+        groupId: "SW-II-A", // Grupo con 3 alumnos en mock (1, 2, 3)
+        date: "2026-05-25",
+        expectedStart: "2026-05-25T07:00:00.000Z",
+        expectedEnd: expectedEnd,
+        status: "ACTIVE",
+        toleranceType: "STATIC",
+        toleranceLimit: "2026-05-25T07:15:00.000Z",
+      });
+
+      // Registrar un alumno puntual
+      await db.insert(attendances).values({
+        id: crypto.randomUUID(),
+        studentCui: "20201234",
+        sessionId,
+        checkIn: "2026-05-25T07:05:00.000Z",
+        status: "PUNTUAL",
+      });
+
+      await testApiHandler({
+        appHandler: checkAbsenceRoute,
+        async test({ fetch }) {
+          const res = await fetch({
+            method: "POST",
+            body: JSON.stringify({
+              sessionId,
+              mockTime: "2026-05-25T08:41:00.000Z", // 1 min después de la hora de fin
+            }),
+          });
+          const json = await res.json();
+
+          expect(json.closed).toBe(true);
+          expect(json.absentCount).toBeGreaterThan(0);
+
+          // Verificar sesión cerrada
+          const sess = await db
+            .select()
+            .from(sessions)
+            .where(eq(sessions.id, sessionId))
+            .limit(1)
+            .then((r) => r[0]);
+          expect(sess.status).toBe("CLOSED");
+
+          // Verificar que el alumno 1 tiene salida forzada (RF-13)
+          const att1 = await db
+            .select()
+            .from(attendances)
+            .where(
+              and(
+                eq(attendances.sessionId, sessionId),
+                eq(attendances.studentCui, "20201234"),
+              ),
+            )
+            .limit(1)
+            .then((r) => r[0]);
+          expect(att1.checkOut).toBe(expectedEnd);
+          expect(att1.checkOutType).toBe("FORCED_BY_SESSION_CLOSE");
+
+          // Verificar que los alumnos 2 y 3 tienen FALTA (RF-10)
+          const absences = await db
+            .select()
+            .from(attendances)
+            .where(
+              and(
+                eq(attendances.sessionId, sessionId),
+                eq(attendances.status, "FALTA"),
+              ),
+            );
+
+          const absentCuis = absences.map((a) => a.studentCui);
+          expect(absentCuis).toContain("20210001");
+          expect(absentCuis).toContain("20210002");
+        },
+      });
+    });
+
     // TC-3.07: Llegada de docente tras límite de suspensión
     it("debe rechazar marcación del docente si la sesión ya fue suspendida (TC-3.07)", async () => {
       const sessionId = crypto.randomUUID();
@@ -422,17 +504,19 @@ describe("API Integration Tests - Módulos 1, 2, 3, 4, 6, 8", () => {
             .from(sessions)
             .where(eq(sessions.id, sessionId));
           expect(oldSession[0].status).toBe("CLOSED");
-// Verificar que hubo auto-checkout para Juan y faltas para Carlos y Ana
-const oldAtt = await db
-  .select()
-  .from(attendances)
-  .where(eq(attendances.sessionId, sessionId));
-expect(oldAtt.length).toBe(3);
-expect(oldAtt.find((a) => a.studentCui === "20201234")?.checkOutType).toBe(
-  "FORCED_BY_SESSION_CLOSE",
-);
-expect(oldAtt.filter((a) => a.status === "FALTA").length).toBe(2);
 
+          // Verificar que hubo auto-checkout para Juan y falta para Carlos (RF-10, RF-13)
+          // Ana Choque (20210002) NO debe tener falta porque está asistiendo a esta otra sesión (RF-Flexible)
+          const oldAtt = await db
+            .select()
+            .from(attendances)
+            .where(eq(attendances.sessionId, sessionId));
+
+          expect(oldAtt.length).toBe(2); // Juan + Carlos
+          expect(
+            oldAtt.find((a) => a.studentCui === "20201234")?.checkOutType,
+          ).toBe("FORCED_BY_SESSION_CLOSE");
+          expect(oldAtt.filter((a) => a.status === "FALTA").length).toBe(1); // Solo Carlos
 
           // Verificar que se creó una sesión nueva para SW-II-B
           const newSessions = await db
@@ -479,35 +563,29 @@ expect(oldAtt.filter((a) => a.status === "FALTA").length).toBe(2);
         status: "PUNTUAL",
       });
 
-      await testApiHandler({
-        appHandler: closeSessionRoute,
-        async test({ fetch }) {
-          const res = await fetch({
-            method: "POST",
-            body: JSON.stringify({ sessionId }),
-          });
-          const json = await res.json();
+      const result = await SessionService.closeSession(
+        sessionId,
+        "Cierre de Sesión",
+      );
 
-          expect(json.success).toBe(true);
-          expect(json.closedCount).toBe(1);
+      expect(result.success).toBe(true);
+      expect(result.forcedCheckOutCount).toBe(1);
 
-          const att = await db.select().from(attendances).limit(1);
-          expect(att[0].checkOut).toBe("2026-05-25T08:40:00.000Z");
-          expect(att[0].checkOutType).toBe("FORCED_BY_SESSION_CLOSE");
+      const att = await db.select().from(attendances).limit(1);
+      expect(att[0].checkOut).toBe("2026-05-25T08:40:00.000Z");
+      expect(att[0].checkOutType).toBe("FORCED_BY_SESSION_CLOSE");
 
-          // [RF-10] Verificar que los alumnos que NO marcaron ahora tienen estado FALTA
-          // Juan Pérez (20201234) ya marcó.
-          // Carlos Condori (20210001) y Ana Choque (20210002) son de SW-II-A y no marcaron.
-          const faltas = await db
-            .select()
-            .from(attendances)
-            .where(eq(attendances.status, "FALTA"));
-          expect(faltas.length).toBe(2);
-          const cuis = faltas.map((f) => f.studentCui);
-          expect(cuis).toContain("20210001");
-          expect(cuis).toContain("20210002");
-        },
-      });
+      // [RF-10] Verificar que los alumnos que NO marcaron ahora tienen estado FALTA
+      // Juan Pérez (20201234) ya marcó.
+      // Carlos Condori (20210001) y Ana Choque (20210002) son de SW-II-A y no marcaron.
+      const faltas = await db
+        .select()
+        .from(attendances)
+        .where(eq(attendances.status, "FALTA"));
+      expect(faltas.length).toBe(2);
+      const cuis = faltas.map((f) => f.studentCui);
+      expect(cuis).toContain("20210001");
+      expect(cuis).toContain("20210002");
     });
 
     // TC-6.09: Inasistencias automáticas en cierre automático (Swipe)
