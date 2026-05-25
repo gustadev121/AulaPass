@@ -166,7 +166,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { groupId, toleranceType, toleranceMinutes, virtualMode, date } =
+    const { groupId, toleranceType, toleranceMinutes, date } =
       body;
 
     const now = date ? new Date(date) : new Date();
@@ -185,12 +185,6 @@ export async function POST(request: NextRequest) {
 
     if (activeSession) {
       // Actualizar sesión activa existente
-      let virtualCode = activeSession.virtualCode;
-      if (virtualMode && !virtualCode) {
-        // Generar código de contingencia virtual de 6 dígitos (RF-12)
-        virtualCode = Math.floor(100000 + Math.random() * 900000).toString();
-      }
-
       // Re-calcular límite de tolerancia si cambia el tipo/minutos
       let toleranceLimit = activeSession.toleranceLimit;
       if (toleranceType && toleranceMinutes !== undefined) {
@@ -215,7 +209,6 @@ export async function POST(request: NextRequest) {
         .set({
           toleranceType: toleranceType || activeSession.toleranceType,
           toleranceLimit: toleranceLimit,
-          virtualCode: virtualCode,
         })
         .where(eq(sessions.id, activeSession.id));
 
@@ -279,10 +272,6 @@ export async function POST(request: NextRequest) {
       ).toISOString();
     }
 
-    const virtualCode = virtualMode
-      ? Math.floor(100000 + Math.random() * 900000).toString()
-      : null;
-
     const newSession = {
       id: crypto.randomUUID(),
       groupId: group.id,
@@ -293,7 +282,6 @@ export async function POST(request: NextRequest) {
       status: "ACTIVE" as const,
       toleranceType: tType,
       toleranceLimit,
-      virtualCode,
     };
 
     await db.insert(sessions).values(newSession);

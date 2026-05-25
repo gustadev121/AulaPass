@@ -69,51 +69,41 @@ Este documento contiene el catálogo exhaustivo y definitivo de casos de prueba 
 | TC-4.16 | Day Rollover (Reinicio diario de historial de flujos) | RF-09 | Alumno marca Entrada a las 23:50 (día 1) sin marcar Salida. Marca el día 2 a las 08:00. | La marca del día 2 se registra como una nueva **Entrada**, reiniciando el flujo diario. | PE |
 | TC-4.17 | Colisión de Entrada y Cierre de Bloque (Exact millisecond) | RF-13, 11 | T = 09:30:00. Alumno marca Entrada exactamente al cierre oficial. | El sistema NO lo registra en la clase que cierra; lo clasifica como inicio de **Ambiente de Estudio**. | AVL |
 
-## Módulo 5: Contingencia de Sesiones Virtuales
-
-| ID Caso | Descripción | Requerimiento | Datos de Entrada / Estado | Resultado Esperado | Técnica |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| TC-5.01 | Marcación virtual con modalidad inactiva | RF-12 | Modo virtual OFF. Solicitud recibida vía endpoint/QR. | Petición rechazada, acceso no autorizado. | PE |
-| TC-5.02 | Marcación virtual con código activo y válido | RF-12 | Modo virtual ON. Código temporal vigente. | Asistencia virtual registrada exitosamente en el historial. | PE |
-| TC-5.03 | Marcación virtual con código temporal expirado | RF-12 | Modo virtual ON. Código vencido suministrado. | Petición rechazada. | PE |
-| TC-5.04 | Registro manual docente en contingencia virtual | RF-12 | Modo virtual ON. Docente llena manualmente asistencia de alumno desde panel. | Asistencia del alumno ingresada y validada en la base de datos. | PE |
-
-## Módulo 6: Resiliencia ante Errores Humanos y Modificaciones Manuales
+## Módulo 5: Resiliencia ante Errores Humanos y Modificaciones Manuales
 
 *(Nota: Para el cierre de bloque, se asume que la clase finaliza a las 09:30:00).*
 
 | ID Caso | Descripción | Requerimiento | Datos de Entrada / Estado | Resultado Esperado | Técnica |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| TC-6.01 | Salida de estudiante justo antes del cierre del bloque | RF-13 | T = 09:29:59. Alumno marca salida normalmente. | Salida registrada por el usuario en el timestamp exacto. | AVL |
-| TC-6.02 | Salida de estudiante en el límite exacto del cierre | RF-13 | T = 09:30:00. Alumno marca salida en ese segundo. | Salida registrada por el usuario con normalidad (previo al cierre automático de huérfanos). | AVL |
-| TC-6.03 | Cierre Automático forzado por olvido (1 seg post cierre) | RF-13 | T = 09:30:01. Hay alumnos con estado "dentro del aula". | El sistema autocompleta la salida de todos. Etiqueta: "Salida por Cierre de Sesión" en T = 09:30:00. | AVL |
-| TC-6.04 | Marcación física posterior al cierre automático | RF-13, 11 | T = 09:35:00. Alumno (que fue auto-retirado a las 09:30) vuelve a marcar físicamente. | Se registra como una nueva Entrada bajo el concepto de **Ambiente de Estudio**. | AVL/PE |
-| TC-6.05 | Modificación manual autorizada: Alteración de estado | RF-14 | Panel docente. Se cambia estado de Falta a Tardanza. | Cambio guardado en BD. Se inserta un registro en el log de auditoría. | PE |
-| TC-6.06 | Modificación manual autorizada: Anulación de registro | RF-14 | Panel docente. Se anula una marcación previa. | Marca eliminada/invalidada. Se inserta un registro en el log de auditoría. | PE |
-| TC-6.07 | Modificación manual autorizada: Añadir nuevo registro | RF-14 | Panel docente. El profesor inserta a un alumno sin marcas previas en el día. | Registro de asistencia creado exitosamente desde cero en la BD con su log de auditoría. | PE |
+| TC-5.01 | Salida de estudiante justo antes del cierre del bloque | RF-12 | T = 09:29:59. Alumno marca salida normalmente. | Salida registrada por el usuario en el timestamp exacto. | AVL |
+| TC-5.02 | Salida de estudiante en el límite exacto del cierre | RF-12 | T = 09:30:00. Alumno marca salida en ese segundo. | Salida registrada por el usuario con normalidad (previo al cierre automático de huérfanos). | AVL |
+| TC-5.03 | Cierre Automático forzado por olvido (1 seg post cierre) | RF-12 | T = 09:30:01. Hay alumnos con estado "dentro del aula". | El sistema autocompleta la salida de todos. Etiqueta: "Salida por Cierre de Sesión" en T = 09:30:00. | AVL |
+| TC-5.04 | Marcación física posterior al cierre automático | RF-12, 11 | T = 09:35:00. Alumno (que fue auto-retirado a las 09:30) vuelve a marcar físicamente. | Se registra como una nueva Entrada bajo el concepto de **Ambiente de Estudio**. | AVL/PE |
+| TC-5.05 | Modificación manual autorizada: Alteración de estado | RF-13 | Panel docente. Se cambia estado de Falta a Tardanza. | Cambio guardado en BD. Se inserta un registro en el log de auditoría. | PE |
+| TC-5.06 | Modificación manual autorizada: Anulación de registro | RF-13 | Panel docente. Se anula una marcación previa. | Marca eliminada/invalidada. Se inserta un registro en el log de auditoría. | PE |
+| TC-5.07 | Modificación manual autorizada: Añadir nuevo registro | RF-13 | Panel docente. El profesor inserta a un alumno sin marcas previas en el día. | Registro de asistencia creado exitosamente desde cero en la BD con su log de auditoría. | PE |
 
-## Módulo 7: Respuesta Visual en Pantalla
+## Módulo 6: Respuesta Visual en Pantalla
 
 | ID Caso | Descripción | Requerimiento | Datos de Entrada / Estado | Resultado Esperado | Técnica |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| TC-7.01 | Respuesta UI para registro exitoso Puntual | RF-15 | Motor lógico devuelve estado: Puntual. | La interfaz muta a color **Verde**. | PE |
-| TC-7.02 | Respuesta UI para registro exitoso Tardanza | RF-15 | Motor lógico devuelve estado: Tardanza. | La interfaz muta a color **Ámbar**. | PE |
-| TC-7.03 | Respuesta UI para registro Salida o Ambiente de Estudio | RF-15 | Motor lógico devuelve estado: Salida / Ambiente Estudio. | La interfaz muta a color **Azul**. | PE |
-| TC-7.04 | Respuesta UI para registro denegado / Falta | RF-15 | Motor lógico devuelve estado: Falta, Inválido o Error. | La interfaz muta a color **Rojo**. | PE |
-| TC-7.05 | Temporizador de Restablecimiento UI (10ms antes de reset) | RF-16 | T = 2.99 segundos tras marcación. | La pantalla mantiene el color de respuesta asignado. | AVL |
-| TC-7.06 | Temporizador de Restablecimiento UI (En el límite exacto) | RF-16 | T = 3.00 segundos exactos. | La interfaz visual se limpia y regresa al estado base. | AVL |
-| TC-7.07 | Temporizador de Restablecimiento UI (10ms después del reset)| RF-16 | T = 3.01 segundos. | La interfaz permanece en estado base. | AVL |
-| TC-7.08 | Auto-Focus del Campo de Ingreso Post-Restablecimiento | RF-01 | UI acaba de restablecerse tras 3 segundos. | El input HTML recupera el `focus` automáticamente, listo para capturar sin interacción de mouse/teclado. | PE |
+| TC-6.01 | Respuesta UI para registro exitoso Puntual | RF-14 | Motor lógico devuelve estado: Puntual. | La interfaz muta a color **Verde**. | PE |
+| TC-6.02 | Respuesta UI para registro exitoso Tardanza | RF-14 | Motor lógico devuelve estado: Tardanza. | La interfaz muta a color **Ámbar**. | PE |
+| TC-6.03 | Respuesta UI para registro Salida o Ambiente de Estudio | RF-14 | Motor lógico devuelve estado: Salida / Ambiente Estudio. | La interfaz muta a color **Azul**. | PE |
+| TC-6.04 | Respuesta UI para registro denegado / Falta | RF-14 | Motor lógico devuelve estado: Falta, Inválido o Error. | La interfaz muta a color **Rojo**. | PE |
+| TC-6.05 | Temporizador de Restablecimiento UI (10ms antes de reset) | RF-15 | T = 2.99 segundos tras marcación. | La pantalla mantiene el color de respuesta asignado. | AVL |
+| TC-6.06 | Temporizador de Restablecimiento UI (En el límite exacto) | RF-16 | T = 3.00 segundos exactos. | La interfaz visual se limpia y regresa al estado base. | AVL |
+| TC-6.07 | Temporizador de Restablecimiento UI (10ms después del reset)| RF-15 | T = 3.01 segundos. | La interfaz permanece en estado base. | AVL |
+| TC-6.08 | Auto-Focus del Campo de Ingreso Post-Restablecimiento | RF-01 | UI acaba de restablecerse tras 3 segundos. | El input HTML recupera el `focus` automáticamente, listo para capturar sin interacción de mouse/teclado. | PE |
 
 ## Casos Transversales de Robustez (RNF)
 
 | ID Caso | Descripción | Requerimiento | Datos de Entrada / Estado | Resultado Esperado | Técnica |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| TC-8.01 | Sobrecarga de longitud en input | RNF-01 | Input recibe un string numérico de 1000 caracteres. | Procesamiento truncado/rechazado seguro. Muestra pantalla de error sin caída (crash). | PE |
-| TC-8.02 | Doble marcación por concurrencia extrema | RNF-01 | Mismo ID se envía 2 veces en menos de 50 milisegundos. | Resuelve concurrencia descartando la duplicidad (o procesándola lógicamente) sin corromper la BD. | PE |
-| TC-8.03 | Inaccesibilidad del servicio mock universitario | RNF-01 | API mock `university-service` no responde o falla. | Sistema captura excepción, muestra notificación roja y se recupera de inmediato. | PE |
-| TC-8.04 | Rendimiento de Procesamiento (1ms antes del umbral) | RNF-02 | Tiempo total de respuesta de 149 milisegundos. | Procesado validado exitosamente dentro del margen esperado. | AVL |
-| TC-8.05 | Rendimiento de Procesamiento (Límite exacto de umbral) | RNF-02 | Tiempo total de respuesta de 150 milisegundos. | Procesado validado exitosamente (en el límite exigido). | AVL |
-| TC-8.06 | Rendimiento de Procesamiento (1ms después del umbral) | RNF-02 | Tiempo total de respuesta de 151 milisegundos. | Supera el umbral. Ejecución del manejador de timeout/advertencia si aplica, o registro en logs. | AVL |
-imiento de Procesamiento (1ms después del umbral) | RNF-02 | Tiempo total de respuesta de 151 milisegundos. | Supera el umbral. Ejecución del manejador de timeout/advertencia si aplica, o registro en logs. | AVL |
-| TC-6.08 | Marcación física detona cierre automático diferido | Sesión expirada y alumno marca. | El sistema cierra la sesión expirada, realiza auto-checkouts, y procesa la nueva marcación. | AVL/PE |
+| TC-7.01 | Sobrecarga de longitud en input | RNF-01 | Input recibe un string numérico de 1000 caracteres. | Procesamiento truncado/rechazado seguro. Muestra pantalla de error sin caída (crash). | PE |
+| TC-7.02 | Doble marcación por concurrencia extrema | RNF-01 | Mismo ID se envía 2 veces en menos de 50 milisegundos. | Resuelve concurrencia descartando la duplicidad (o procesándola lógicamente) sin corromper la BD. | PE |
+| TC-7.03 | Inaccesibilidad del servicio mock universitario | RNF-01 | API mock `university-service` no responde o falla. | Sistema captura excepción, muestra notificación roja y se recupera de inmediato. | PE |
+| TC-7.04 | Rendimiento de Procesamiento (1ms antes del umbral) | RNF-02 | Tiempo total de respuesta de 149 milisegundos. | Procesado validado exitosamente dentro del margen esperado. | AVL |
+| TC-7.05 | Rendimiento de Procesamiento (Límite exacto de umbral) | RNF-02 | Tiempo total de respuesta de 150 milisegundos. | Procesado validado exitosamente (en el límite exigido). | AVL |
+| TC-7.06 | Rendimiento de Procesamiento (1ms después del umbral) | RNF-02 | Tiempo total de respuesta de 151 milisegundos. | Supera el umbral. Ejecución del manejador de timeout/advertencia si aplica, o registro en logs. | AVL |
+| TC-5.08 | Marcación física detona cierre automático diferido | Sesión expirada y alumno marca. | El sistema cierra la sesión expirada, realiza auto-checkouts, y procesa la nueva marcación. | AVL/PE |

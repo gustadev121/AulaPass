@@ -43,25 +43,19 @@ A continuación, se presentan las tablas de requerimientos funcionales del siste
 | **RF-10** | Clasificación de Puntualidad | El sistema debe evaluar la hora de ingreso del alumno respecto al horario oficial y la tolerancia activa para categorizar la asistencia en tres estados: **Puntual** (ingreso a tiempo), **Tardanza** (retraso dentro del límite de tolerancia) o **Falta** (ingreso posterior al límite establecido). |
 | **RF-11** | Registro de Uso del Aula en Hora Hueco | Si un estudiante ingresa su identificador durante un periodo en el que no hay clases oficiales programadas en el aula (según la programación horaria obtenida del sistema simulado de la universidad), o si pertenece a la clase del siguiente turno académico y llega con excesiva anticipación, el sistema registrará su marca bajo el estado neutral de **Ambiente de Estudio**, permitiendo su permanencia temporal sin afectar sus récords académicos formales. |
 
-### Módulo 5: Contingencia de Sesiones Virtuales
+### Módulo 5: Resiliencia ante Errores Humanos y Modificaciones Manuales
 
 | ID | Nombre | Descripción |
 | :--- | :--- | :--- |
-| **RF-12** | Modo de Asistencia Virtual Contingente | Ante situaciones excepcionales (como suspensión de clases presenciales por protestas o mantenimiento), el docente podrá activar de forma remota o local el modo virtual para la sesión. Esto habilitará un canal de acceso alternativo para que los alumnos registren su asistencia mediante dispositivos móviles individuales utilizando un código temporal de validación de sesión. O en su defecto, el docente podrá llenar personalmente el registro de asistencia. |
+| **RF-12** | Cierre Automático por Olvido de Marcación de Salida | El sistema debe mitigar el olvido de los estudiantes que no marcan su salida al retirarse del salón. Al concluir oficialmente el bloque horario asignado a la clase activa, el sistema cerrará de forma automática el registro de todos los alumnos que quedaron con estado "dentro del aula", asignándoles una salida forzada correspondiente al último minuto del bloque académico oficial con la etiqueta "Salida por Cierre de Sesión". |
+| **RF-13** | Corrección y Modificación Manual de Asistencia | El docente tendrá la potestad exclusiva, desde el panel de control del aula, de modificar, añadir o anular cualquier estado de asistencia registrado automáticamente por el tótem (por ejemplo, cambiar una "Falta" por "Tardanza/Puntual" debido a justificaciones excepcionales de fuerza mayor de un estudiante). Toda modificación manual quedará registrada en un historial interno para auditoría. |
 
-### Módulo 6: Resiliencia ante Errores Humanos y Modificaciones Manuales
-
-| ID | Nombre | Descripción |
-| :--- | :--- | :--- |
-| **RF-13** | Cierre Automático por Olvido de Marcación de Salida | El sistema debe mitigar el olvido de los estudiantes que no marcan su salida al retirarse del salón. Al concluir oficialmente el bloque horario asignado a la clase activa, el sistema cerrará de forma automática el registro de todos los alumnos que quedaron con estado "dentro del aula", asignándoles una salida forzada correspondiente al último minuto del bloque académico oficial con la etiqueta "Salida por Cierre de Sesión". |
-| **RF-14** | Corrección y Modificación Manual de Asistencia | El docente tendrá la potestad exclusiva, desde el panel de control del aula, de modificar, añadir o anular cualquier estado de asistencia registrado automáticamente por el tótem (por ejemplo, cambiar una "Falta" por "Tardanza/Puntual" debido a justificaciones excepcionales de fuerza mayor de un estudiante). Toda modificación manual quedará registrada en un historial interno para auditoría. |
-
-### Módulo 7: Respuesta Visual en Pantalla
+### Módulo 6: Respuesta Visual en Pantalla
 
 | ID | Nombre | Descripción |
 | :--- | :--- | :--- |
-| **RF-15** | Notificación de Estado por Código de Colores | Tras registrar un identificador, el sistema debe cambiar temporalmente el color de la pantalla completa para dar una respuesta inmediata: <br>- **Verde:** Registro exitoso en estado **Puntual**.<br>- **Ámbar:** Registro exitoso en estado **Tardanza**.<br>- **Azul:** Registro exitoso de **Salida** o **Ambiente de Estudio**.<br>- **Rojo:** Registro en estado **Falta**, alumno no matriculado o error de entrada. |
-| **RF-16** | Temporizador de Restablecimiento de Pantalla | La pantalla de respuesta por colores debe mantenerse fija por un lapso continuo de 3 segundos para que sea legible. Pasado este tiempo, el sistema borrará automáticamente la información del usuario anterior y dejará la pantalla de espera lista para la siguiente marcación. |
+| **RF-14** | Notificación de Estado por Código de Colores | Tras registrar un identificador, el sistema debe cambiar temporalmente el color de la pantalla completa para dar una respuesta inmediata: <br>- **Verde:** Registro exitoso en estado **Puntual**.<br>- **Ámbar:** Registro exitoso en estado **Tardanza**.<br>- **Azul:** Registro exitoso de **Salida** o **Ambiente de Estudio**.<br>- **Rojo:** Registro en estado **Falta**, alumno no matriculado o error de entrada. |
+| **RF-15** | Temporizador de Restablecimiento de Pantalla | La pantalla de respuesta por colores debe mantenerse fija por un lapso continuo de 3 segundos para que sea legible. Pasado este tiempo, el sistema borrará automáticamente la información del usuario anterior y dejará la pantalla de espera lista para la siguiente marcación. |
 
 ---
 

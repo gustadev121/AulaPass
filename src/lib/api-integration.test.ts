@@ -9,9 +9,8 @@ import * as correctAttendanceRoute from "../app/api/teacher/attendance/correct/r
 import * as teacherLoginRoute from "../app/api/teacher/login/route";
 import * as checkAbsenceRoute from "../app/api/teacher/session/check-absence/route";
 import * as closeSessionRoute from "../app/api/teacher/session/close/route";
-import * as virtualSwipeRoute from "../app/api/virtual/swipe/route";
 
-describe("API Integration Tests - Módulos 1, 2, 3, 4, 5, 6, 8", () => {
+describe("API Integration Tests - Módulos 1, 2, 3, 4, 6, 8", () => {
   beforeEach(async () => {
     // Limpiar tablas antes de cada prueba
     await db.delete(auditLogs);
@@ -365,139 +364,6 @@ describe("API Integration Tests - Módulos 1, 2, 3, 4, 5, 6, 8", () => {
 
           expect(res.status).toBe(400);
           expect(json.message).toContain("suspendida");
-        },
-      });
-    });
-  });
-
-  describe("Módulo 5: Contingencia de Sesiones Virtuales (RF-12)", () => {
-    it("debe rechazar la marcación virtual si el modo está inactivo (TC-5.01)", async () => {
-      await testApiHandler({
-        appHandler: virtualSwipeRoute,
-        async test({ fetch }) {
-          const res = await fetch({
-            method: "POST",
-            body: JSON.stringify({
-              DniCui: "20201234",
-              virtualCode: "123456",
-            }),
-          });
-          const json = await res.json();
-
-          expect(res.status).toBe(400);
-          expect(json.success).toBe(false);
-        },
-      });
-    });
-
-    it("debe registrar asistencia con código virtual válido (TC-5.02)", async () => {
-      const sessionId = crypto.randomUUID();
-      await db.insert(sessions).values({
-        id: sessionId,
-        groupId: "SW-II-A",
-        date: "2026-05-25",
-        expectedStart: "2026-05-25T07:00:00.000Z",
-        expectedEnd: "2026-05-25T08:40:00.000Z",
-        status: "ACTIVE",
-        toleranceType: "STATIC",
-        toleranceLimit: "2026-05-25T07:15:00.000Z",
-        virtualCode: "654321",
-      });
-
-      await testApiHandler({
-        appHandler: virtualSwipeRoute,
-        async test({ fetch }) {
-          const res = await fetch({
-            method: "POST",
-            body: JSON.stringify({
-              DniCui: "20201234",
-              virtualCode: "654321",
-            }),
-          });
-          const json = await res.json();
-
-          expect(res.status).toBe(200);
-          expect(json.success).toBe(true);
-
-          const att = await db
-            .select()
-            .from(attendances)
-            .where(eq(attendances.sessionId, sessionId));
-          expect(att.length).toBe(1);
-          expect(att[0].observation).toContain("Contingencia Virtual");
-        },
-      });
-    });
-
-    it("debe rechazar la marcación con código virtual expirado (TC-5.03)", async () => {
-      await db.insert(sessions).values({
-        id: crypto.randomUUID(),
-        groupId: "SW-II-A",
-        date: "2026-05-25",
-        expectedStart: "2026-05-25T07:00:00.000Z",
-        expectedEnd: "2026-05-25T08:40:00.000Z",
-        status: "CLOSED",
-        toleranceType: "STATIC",
-        toleranceLimit: "2026-05-25T07:15:00.000Z",
-        virtualCode: "999999",
-      });
-
-      await testApiHandler({
-        appHandler: virtualSwipeRoute,
-        async test({ fetch }) {
-          const res = await fetch({
-            method: "POST",
-            body: JSON.stringify({
-              DniCui: "20201234",
-              virtualCode: "999999",
-            }),
-          });
-          const json = await res.json();
-
-          expect(res.status).toBe(400);
-          expect(json.success).toBe(false);
-        },
-      });
-    });
-
-    // TC-5.04: Registro manual docente en contingencia virtual
-    it("debe permitir al docente registrar manualmente a un alumno en modo virtual (TC-5.04)", async () => {
-      const sessionId = crypto.randomUUID();
-      await db.insert(sessions).values({
-        id: sessionId,
-        groupId: "SW-II-A",
-        date: "2026-05-25",
-        expectedStart: "2026-05-25T07:00:00.000Z",
-        expectedEnd: "2026-05-25T08:40:00.000Z",
-        status: "ACTIVE",
-        toleranceType: "STATIC",
-        toleranceLimit: "2026-05-25T07:15:00.000Z",
-        virtualCode: "VIRT12",
-      });
-
-      await testApiHandler({
-        appHandler: correctAttendanceRoute,
-        async test({ fetch }) {
-          const res = await fetch({
-            method: "POST",
-            body: JSON.stringify({
-              operation: "CREATE",
-              studentCui: "20201234",
-              sessionId,
-              newStatus: "PUNTUAL",
-              reason: "Registro manual en clase virtual",
-              actorCode: "10101010",
-            }),
-          });
-          const json = await res.json();
-
-          expect(json.success).toBe(true);
-          const att = await db
-            .select()
-            .from(attendances)
-            .where(eq(attendances.sessionId, sessionId));
-          expect(att.length).toBe(1);
-          expect(att[0].status).toBe("PUNTUAL");
         },
       });
     });

@@ -580,7 +580,6 @@ export async function POST(request: NextRequest) {
           status: "ACTIVE",
           toleranceType: "STATIC",
           toleranceLimit: now.toISOString(),
-          virtualCode: null,
         };
       }
 

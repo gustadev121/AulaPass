@@ -14,7 +14,6 @@ export const sessions = sqliteTable("sessions", {
     .notNull()
     .default("STATIC"),
   toleranceLimit: text("tolerance_limit"), // ISO String
-  virtualCode: text("virtual_code"), // Código para marcación virtual
 });
 
 export const attendances = sqliteTable("attendances", {

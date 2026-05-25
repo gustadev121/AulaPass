@@ -22,7 +22,6 @@ interface Session {
   status: "ACTIVE" | "CLOSED" | "SUSPENDED";
   toleranceType: "STATIC" | "DYNAMIC";
   toleranceLimit?: string | null;
-  virtualCode?: string | null;
 }
 
 interface Group {
@@ -278,23 +277,6 @@ export default function TeacherPanel({
     }
   };
 
-  const handleActivateVirtual = async () => {
-    try {
-      const response = await fetch("/api/teacher/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ virtualMode: true }),
-      });
-      const data = await response.json();
-      if (data.success) {
-        setSelectedSession(data.session);
-        setMessage("Modo virtual activado.");
-      }
-    } catch (_error) {
-      setMessage("Error al activar modo virtual.");
-    }
-  };
-
   if (isLoading)
     return (
       <div className="p-8 text-center text-2xl font-bold">
@@ -457,33 +439,6 @@ export default function TeacherPanel({
             <p className="text-4xl font-bold text-red-600">
               {attendances.filter((a) => a.status === "FALTA").length}
             </p>
-          </div>
-          <div className="border-l pl-6">
-            <p className="text-sm text-gray-500 uppercase tracking-wide">
-              Modo Contingencia
-            </p>
-            {selectedSession?.virtualCode ? (
-              <div className="mt-2">
-                <p className="text-2xl font-mono font-bold text-purple-600">
-                  {selectedSession.virtualCode}
-                </p>
-                <p className="text-xs text-gray-400">Código de Acceso Remoto</p>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={handleActivateVirtual}
-                disabled={!isCurrentSessionActive}
-                className={`mt-2 px-4 py-1 text-sm border rounded-md font-medium transition ${
-                  isCurrentSessionActive
-                    ? "border-purple-600 text-purple-600 hover:bg-purple-50"
-                    : "border-gray-300 text-gray-400 cursor-not-allowed"
-                }`}
-                title="Habilita un código para que los alumnos marquen asistencia desde sus dispositivos si el QR físico falla"
-              >
-                Habilitar Código Virtual
-              </button>
-            )}
           </div>
         </div>
 
