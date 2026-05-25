@@ -45,6 +45,12 @@ describe("AttendanceRulesEngine - Pruebas Iniciales de Caja Negra", () => {
       const limit = AttendanceRulesEngine.calculateToleranceLimit(expectedStart, teacherCheckIn, "DYNAMIC", 15);
       expect(limit.toISOString()).toBe("2026-05-24T07:20:00.000Z");
     });
+    
+    // PE Válida: Tolerancia Dinámica sin ingreso docente (Fallback)
+    it("debe usar hora programada como base si es DYNAMIC pero el docente no ha ingresado", () => {
+      const limit = AttendanceRulesEngine.calculateToleranceLimit(expectedStart, null, "DYNAMIC", 10);
+      expect(limit.toISOString()).toBe("2026-05-24T07:10:00.000Z");
+    });
 
     // AVL: Tolerancia 0
     it("debe manejar tolerancia de 0 minutos (AVL exacto)", () => {
@@ -73,6 +79,24 @@ describe("AttendanceRulesEngine - Pruebas Iniciales de Caja Negra", () => {
     it("debe retornar true si pasa 1 segundo del tiempo permitido", () => {
       const now = new Date("2026-05-24T07:20:01Z");
       expect(AttendanceRulesEngine.isTeacherLate(start, null, now, delay)).toBe(true);
+    });
+
+    // PE Válida: Docente presente
+    it("debe retornar false inmediatamente si el docente ya marcó ingreso, sin importar el tiempo", () => {
+      const now = new Date("2026-05-24T08:00:00Z"); // Mucho después del límite
+      const checkIn = new Date("2026-05-24T07:05:00Z");
+      expect(AttendanceRulesEngine.isTeacherLate(start, checkIn, now, delay)).toBe(false);
+    });
+  });
+
+  describe("Helpers de Tiempo", () => {
+    it("debe calcular correctamente los minutos restantes", () => {
+      const deadline = new Date("2026-05-24T08:00:00Z");
+      const now = new Date("2026-05-24T07:45:30Z");
+      expect(AttendanceRulesEngine.getMinutesRemaining(deadline, now)).toBe(15);
+      
+      const past = new Date("2026-05-24T08:05:00Z");
+      expect(AttendanceRulesEngine.getMinutesRemaining(deadline, past)).toBe(0);
     });
   });
 
@@ -105,8 +129,10 @@ describe("AttendanceRulesEngine - Pruebas Iniciales de Caja Negra", () => {
 
     // AVL Exacto: Justo en el límite de tolerancia
     it("debe ser PUNTUAL exactamente en el límite de tolerancia", () => {
-      const result = AttendanceRulesEngine.evaluateStudentSwipe(baseInput, false);
-      baseInput.currentTime = new Date("2026-05-24T07:15:00Z");
+      const result = AttendanceRulesEngine.evaluateStudentSwipe(
+        { ...baseInput, currentTime: new Date("2026-05-24T07:15:00Z") },
+        false
+      );
       expect(result.status).toBe("PUNTUAL");
     });
 
@@ -136,6 +162,49 @@ describe("AttendanceRulesEngine - Pruebas Iniciales de Caja Negra", () => {
       );
       expect(result.status).toBe("FALTA");
     });
+
+    // RF-04: Flexibilidad de Grupo (Mismo curso, distinto grupo)
+    it("debe permitir ingreso PUNTUAL si el alumno es de otro grupo pero del mismo curso", () => {
+      const result = AttendanceRulesEngine.evaluateStudentSwipe(
+        { 
+          ...baseInput, 
+          activeSession: { ...baseInput.activeSession!, groupId: "SW-II-B" } 
+        },
+        false
+      );
+      expect(result.valid).toBe(true);
+      expect(result.status).toBe("PUNTUAL");
+    });
+
+    // RF-04: Validación de Matrícula (Escenario Negativo)
+    it("debe rechazar (valid: false) si el alumno no pertenece a ningún grupo del curso", () => {
+      const studentStranger: ExternalStudent = { cui: "9999", name: "Extraño", enrolledGroupIds: ["OTRO-CURSO"] };
+      const result = AttendanceRulesEngine.evaluateStudentSwipe({ ...baseInput, student: studentStranger }, false);
+      expect(result.valid).toBe(false);
+      expect(result.message).toContain("no matriculado");
+    });
+  });
+
+  describe("RF-05 - Sesión de Emergencia", () => {
+    it("debe disparar autogeneración de emergencia si hay horario pero no sesión", () => {
+      const now = new Date("2026-05-24T07:30:00Z");
+      const input: AttendanceRuleInput = {
+        currentTime: now,
+        student: mockStudent,
+        activeSession: null,
+        currentCourseGroups,
+        classroomSchedules: [
+          { 
+            groupId: "SW-II-A", 
+            startTime: new Date("2026-05-24T07:00:00Z"), 
+            endTime: new Date("2026-05-24T08:40:00Z") 
+          }
+        ],
+      };
+      const result = AttendanceRulesEngine.evaluateStudentSwipe(input, false);
+      expect(result.status).toBe("PUNTUAL");
+      expect(result.message).toContain("autogeneración de emergencia");
+    });
   });
 
   describe("RF-11 - Ambiente de Estudio", () => {
@@ -155,6 +224,23 @@ describe("AttendanceRulesEngine - Pruebas Iniciales de Caja Negra", () => {
       const result = AttendanceRulesEngine.evaluateStudentSwipe(input, false);
       expect(result.status).toBe("AMBIENTE_ESTUDIO");
       expect(result.message).toContain("Hora Hueco");
+    });
+  });
+
+  describe("RNF-01 - Robustez", () => {
+    it("debe manejar inputs nulos o incompletos sin crashear", () => {
+      // @ts-ignore: Prueba de robustez en runtime
+      const result1 = AttendanceRulesEngine.evaluateStudentSwipe(null, false);
+      expect(result1.valid).toBe(false);
+      expect(result1.message).toContain("inválidos");
+
+      const incompleteInput: Partial<AttendanceRuleInput> = {
+        student: mockStudent
+        // Falta currentTime
+      };
+      // @ts-ignore: Prueba de robustez
+      const result2 = AttendanceRulesEngine.evaluateStudentSwipe(incompleteInput, false);
+      expect(result2.valid).toBe(false);
     });
   });
 
