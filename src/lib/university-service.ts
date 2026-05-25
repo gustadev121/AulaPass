@@ -143,6 +143,15 @@ export class UniversityService {
   }
 
   /**
+   * Obtiene todos los alumnos matriculados en un grupo
+   */
+  static async getStudentsByGroup(groupId: string): Promise<ExternalStudent[]> {
+    return MOCK_STUDENTS.filter((s) => s.enrolledGroupIds.includes(groupId)).map(
+      (s) => ({ ...s }),
+    );
+  }
+
+  /**
    * Obtiene todos los grupos que tiene asignados un docente
    */
   static async getGroupsByTeacher(

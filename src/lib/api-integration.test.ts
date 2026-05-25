@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { testApiHandler } from "next-test-api-route-handler";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/db";
@@ -167,7 +167,11 @@ describe("API Integration Tests - Módulos 1, 2, 3, 4, 5, 6, 8", () => {
           expect(resT.status).toBe(200);
 
           // Verificar que la sesión es DYNAMIC
-          const session = await db.select().from(sessions).limit(1).then(res => res[0]);
+          const session = await db
+            .select()
+            .from(sessions)
+            .limit(1)
+            .then((res) => res[0]);
           expect(session.toleranceType).toBe("DYNAMIC");
 
           // 2. Alumno (20205678) marca
@@ -180,8 +184,8 @@ describe("API Integration Tests - Módulos 1, 2, 3, 4, 5, 6, 8", () => {
           });
           const jsonS = await resS.json();
           expect(resS.status).toBe(200);
-          // Antes de la mejora, esto resultaría en "FALTA" debido a la tolerancia STATIC (09:05)
-          expect(jsonS.status).toBe("TARDANZA"); 
+          // Antes resultaba en "TARDANZA", ahora en "PUNTUAL" por estar dentro de tolerancia (RF-10)
+          expect(jsonS.status).toBe("PUNTUAL");
         },
       });
     });
@@ -552,13 +556,17 @@ describe("API Integration Tests - Módulos 1, 2, 3, 4, 5, 6, 8", () => {
             .from(sessions)
             .where(eq(sessions.id, sessionId));
           expect(oldSession[0].status).toBe("CLOSED");
+// Verificar que hubo auto-checkout para Juan y faltas para Carlos y Ana
+const oldAtt = await db
+  .select()
+  .from(attendances)
+  .where(eq(attendances.sessionId, sessionId));
+expect(oldAtt.length).toBe(3);
+expect(oldAtt.find((a) => a.studentCui === "20201234")?.checkOutType).toBe(
+  "FORCED_BY_SESSION_CLOSE",
+);
+expect(oldAtt.filter((a) => a.status === "FALTA").length).toBe(2);
 
-          // Verificar que hubo auto-checkout para Juan
-          const oldAtt = await db
-            .select()
-            .from(attendances)
-            .where(eq(attendances.sessionId, sessionId));
-          expect(oldAtt[0].checkOutType).toBe("FORCED_BY_SESSION_CLOSE");
 
           // Verificar que se creó una sesión nueva para SW-II-B
           const newSessions = await db
@@ -572,7 +580,12 @@ describe("API Integration Tests - Módulos 1, 2, 3, 4, 5, 6, 8", () => {
           const anaAtt = await db
             .select()
             .from(attendances)
-            .where(eq(attendances.studentCui, "20210002"));
+            .where(
+              and(
+                eq(attendances.studentCui, "20210002"),
+                eq(attendances.sessionId, newSessions[0].id),
+              ),
+            );
           expect(anaAtt.length).toBe(1);
         },
       });
@@ -615,6 +628,70 @@ describe("API Integration Tests - Módulos 1, 2, 3, 4, 5, 6, 8", () => {
           const att = await db.select().from(attendances).limit(1);
           expect(att[0].checkOut).toBe("2026-05-25T08:40:00.000Z");
           expect(att[0].checkOutType).toBe("FORCED_BY_SESSION_CLOSE");
+
+          // [RF-10] Verificar que los alumnos que NO marcaron ahora tienen estado FALTA
+          // Juan Pérez (20201234) ya marcó.
+          // Carlos Condori (20210001) y Ana Choque (20210002) son de SW-II-A y no marcaron.
+          const faltas = await db
+            .select()
+            .from(attendances)
+            .where(eq(attendances.status, "FALTA"));
+          expect(faltas.length).toBe(2);
+          const cuis = faltas.map((f) => f.studentCui);
+          expect(cuis).toContain("20210001");
+          expect(cuis).toContain("20210002");
+        },
+      });
+    });
+
+    // TC-6.09: Inasistencias automáticas en cierre automático (Swipe)
+    it("debe marcar FALTA a alumnos ausentes cuando la sesión se cierra automáticamente por swipe (TC-6.09)", async () => {
+      const sessionId = crypto.randomUUID();
+      const expectedEnd = "2026-05-25T08:40:00.000Z";
+
+      await db.insert(sessions).values({
+        id: sessionId,
+        groupId: "SW-II-A",
+        date: "2026-05-25",
+        expectedStart: "2026-05-25T07:00:00.000Z",
+        expectedEnd: expectedEnd,
+        status: "ACTIVE",
+        toleranceType: "STATIC",
+        toleranceLimit: "2026-05-25T07:15:00.000Z",
+      });
+
+      // Juan marca puntual
+      await db.insert(attendances).values({
+        id: crypto.randomUUID(),
+        studentCui: "20201234",
+        sessionId,
+        checkIn: "2026-05-25T07:05:00.000Z",
+        status: "PUNTUAL",
+      });
+
+      // Swipe después de la hora de fin (10:00 AM) detona auto-cierre
+      await testApiHandler({
+        appHandler: swipeRoute,
+        async test({ fetch }) {
+          await fetch({
+            method: "POST",
+            body: JSON.stringify({
+              DniCui: "20210999", // Un alumno de otro curso (detona el check de sesión activa)
+              mockTime: "2026-05-25T15:00:00.000Z", // GMT-5: 10:00 AM
+            }),
+          });
+
+          // Verificar faltas automáticas para Carlos (20210001) y Ana (20210002)
+          const faltas = await db
+            .select()
+            .from(attendances)
+            .where(
+              and(
+                eq(attendances.sessionId, sessionId),
+                eq(attendances.status, "FALTA"),
+              ),
+            );
+          expect(faltas.length).toBe(2);
         },
       });
     });

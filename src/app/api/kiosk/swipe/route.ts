@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, ne } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
@@ -131,11 +131,12 @@ export async function POST(request: NextRequest) {
         let toleranceLimit = session.toleranceLimit;
         let toleranceType = session.toleranceType;
 
-        // [MEJORA] Si el docente llega tarde y la sesión era estática, cambiamos a dinámica 
+        // [MEJORA] Si el docente llega tarde y la sesión era estática, cambiamos a dinámica
         // para no perjudicar a los alumnos que vienen con él.
         const expectedStart = new Date(session.expectedStart);
-        const isLateTeacher = now.getTime() > expectedStart.getTime() + 15 * 60 * 1000;
-        
+        const isLateTeacher =
+          now.getTime() > expectedStart.getTime() + 15 * 60 * 1000;
+
         if (isLateTeacher && toleranceType === "STATIC") {
           toleranceType = "DYNAMIC";
         }
@@ -158,18 +159,22 @@ export async function POST(request: NextRequest) {
           .where(eq(sessions.id, session.id));
       } else {
         // Crear nueva sesión iniciada por el docente
-        const { expectedStart, expectedEnd } = UniversityService.getDatesForSchedule(
-          now,
-          matchedSchedule.startTime,
-          matchedSchedule.endTime,
-        );
+        const { expectedStart, expectedEnd } =
+          UniversityService.getDatesForSchedule(
+            now,
+            matchedSchedule.startTime,
+            matchedSchedule.endTime,
+          );
         const toleranceMinutes = 15; // 15 min de tolerancia por defecto
-        
+
         // [MEJORA] Si el docente llega tarde, iniciamos con tolerancia dinámica
-        const isLateTeacher = now.getTime() > expectedStart.getTime() + toleranceMinutes * 60 * 1000;
+        const isLateTeacher =
+          now.getTime() >
+          expectedStart.getTime() + toleranceMinutes * 60 * 1000;
         const tType = isLateTeacher ? "DYNAMIC" : "STATIC";
         const tLimit = new Date(
-          (isLateTeacher ? now : expectedStart).getTime() + toleranceMinutes * 60 * 1000,
+          (isLateTeacher ? now : expectedStart).getTime() +
+            toleranceMinutes * 60 * 1000,
         ).toISOString();
 
         await db.insert(sessions).values({
@@ -216,11 +221,13 @@ export async function POST(request: NextRequest) {
 
       recentStudentSwipes.set(student.cui, now.getTime());
 
-      // Buscar si existe una sesión de clase activa en la base de datos local
+      // Buscar si existe una sesión de clase activa en la base de datos local (excluyendo Hora Hueco)
       let activeSession: any = await db
         .select()
         .from(sessions)
-        .where(eq(sessions.status, "ACTIVE"))
+        .where(
+          and(eq(sessions.status, "ACTIVE"), ne(sessions.groupId, "HORA_HUECO")),
+        )
         .limit(1)
         .then((res) => res[0]);
 
@@ -234,15 +241,14 @@ export async function POST(request: NextRequest) {
           .set({ status: "CLOSED" })
           .where(eq(sessions.id, activeSession.id));
 
-        const openAttendances = await db
+        const allAttendances = await db
           .select()
           .from(attendances)
-          .where(
-            and(
-              eq(attendances.sessionId, activeSession.id),
-              isNull(attendances.checkOut),
-            ),
-          );
+          .where(eq(attendances.sessionId, activeSession.id));
+
+        const openAttendances = allAttendances.filter(
+          (att) => att.checkOut === null,
+        );
 
         const expectedEndTime = new Date(activeSession.expectedEnd);
         const forcedAttendances = AttendanceRulesEngine.applyAutomaticCheckOuts(
@@ -265,6 +271,27 @@ export async function POST(request: NextRequest) {
               })
               .where(eq(attendances.id, forced.id));
           }
+        }
+
+        // [RF-10] Marcado automático de inasistencias en el cierre automático
+        const enrolledStudents = await UniversityService.getStudentsByGroup(
+          activeSession.groupId,
+        );
+        const absentStudentCuis = AttendanceRulesEngine.applyAutomaticAbsences(
+          enrolledStudents,
+          allAttendances,
+        );
+
+        for (const cui of absentStudentCuis) {
+          await db.insert(attendances).values({
+            id: crypto.randomUUID(),
+            studentCui: cui,
+            sessionId: activeSession.id,
+            checkIn: activeSession.expectedStart,
+            checkOut: activeSession.expectedEnd,
+            status: "FALTA",
+            observation: "Inasistencia automática (Cierre Automático por Expiración)",
+          });
         }
 
         activeSession = undefined;
@@ -349,11 +376,12 @@ export async function POST(request: NextRequest) {
         // Es una Entrada, evaluar reglas de asistencia
         // Formatear los horarios para el motor de reglas
         const formattedSchedules = classroomSchedules.map((item) => {
-          const { expectedStart, expectedEnd } = UniversityService.getDatesForSchedule(
-            now,
-            item.schedule.startTime,
-            item.schedule.endTime,
-          );
+          const { expectedStart, expectedEnd } =
+            UniversityService.getDatesForSchedule(
+              now,
+              item.schedule.startTime,
+              item.schedule.endTime,
+            );
           return {
             groupId: item.group.id,
             startTime: expectedStart,
@@ -430,11 +458,12 @@ export async function POST(request: NextRequest) {
 
       for (const item of classroomSchedules) {
         if (item.schedule.dayOfWeek === mappedDay) {
-          const { expectedStart, expectedEnd } = UniversityService.getDatesForSchedule(
-            now,
-            item.schedule.startTime,
-            item.schedule.endTime,
-          );
+          const { expectedStart, expectedEnd } =
+            UniversityService.getDatesForSchedule(
+              now,
+              item.schedule.startTime,
+              item.schedule.endTime,
+            );
           const earliestStart = new Date(
             expectedStart.getTime() - 30 * 60 * 1000,
           );
@@ -466,11 +495,12 @@ export async function POST(request: NextRequest) {
 
       if (matchedSchedule && matchedGroup) {
         // [RF-05] Autogenerar sesión de emergencia
-        const { expectedStart, expectedEnd } = UniversityService.getDatesForSchedule(
-          now,
-          matchedSchedule.startTime,
-          matchedSchedule.endTime,
-        );
+        const { expectedStart, expectedEnd } =
+          UniversityService.getDatesForSchedule(
+            now,
+            matchedSchedule.startTime,
+            matchedSchedule.endTime,
+          );
         const toleranceMinutes = 15;
         const toleranceLimit = new Date(
           expectedStart.getTime() + toleranceMinutes * 60 * 1000,
@@ -554,7 +584,7 @@ export async function POST(request: NextRequest) {
         };
       }
 
-      // Verificar si ya tiene marcación en la sesión de hora hueco
+      // Verificar si ya tiene marcación activa (sin salida) en la sesión de hora hueco
       const existingHuecoAttendance = await db
         .select()
         .from(attendances)
@@ -562,6 +592,7 @@ export async function POST(request: NextRequest) {
           and(
             eq(attendances.studentCui, student.cui),
             eq(attendances.sessionId, huecoSession.id),
+            isNull(attendances.checkOut),
           ),
         )
         .limit(1)

@@ -181,36 +181,23 @@ export class AttendanceRulesEngine {
     }
 
     // 4. Clasificación de Puntualidad [RF-10] y Tolerancia Dinámica/Estática [RF-07]
-    // PE Válida: Antes o en el inicio (PUNTUAL).
-    // PE Válida: Entre inicio y límite de tolerancia (TARDANZA).
-    // PE Inválida: Posterior al límite de tolerancia (FALTA).
+    // PE Válida: Dentro del límite de tolerancia (PUNTUAL).
+    // PE Válida: Posterior al límite de tolerancia (TARDANZA).
     const toleranceLimit = new Date(activeSession.toleranceLimit);
-    const expectedStart = new Date(activeSession.expectedStart);
-    const punctualLimit =
-      activeSession.toleranceType === "DYNAMIC" && activeSession.teacherCheckIn
-        ? new Date(activeSession.teacherCheckIn)
-        : expectedStart;
 
-    if (currentTime.getTime() <= punctualLimit.getTime()) {
+    if (currentTime.getTime() <= toleranceLimit.getTime()) {
       return {
         valid: true,
         swipeType: "ENTRADA",
         status: "PUNTUAL",
-        message: "Ingreso Puntual.",
-      };
-    } else if (currentTime.getTime() <= toleranceLimit.getTime()) {
-      return {
-        valid: true,
-        swipeType: "ENTRADA",
-        status: "TARDANZA",
-        message: "Ingreso con Tardanza.",
+        message: "Ingreso Puntual (dentro de tolerancia).",
       };
     } else {
       return {
         valid: true,
         swipeType: "ENTRADA",
-        status: "FALTA",
-        message: "Ingreso Fuera de Hora (Falta).",
+        status: "TARDANZA",
+        message: "Ingreso con Tardanza (fuera de tolerancia).",
       };
     }
   }
@@ -232,5 +219,19 @@ export class AttendanceRulesEngine {
       }
       return att;
     });
+  }
+
+  /**
+   * Identifica a los alumnos matriculados que no registraron ninguna marcación.
+   * [RF-10] Estos alumnos serán marcados automáticamente como FALTA al cierre de sesión.
+   */
+  static applyAutomaticAbsences(
+    enrolledStudents: ExternalStudent[],
+    existingAttendances: { studentCui: string }[],
+  ): string[] {
+    const presentCuis = new Set(existingAttendances.map((a) => a.studentCui));
+    return enrolledStudents
+      .filter((s) => !presentCuis.has(s.cui))
+      .map((s) => s.cui);
   }
 }

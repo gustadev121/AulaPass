@@ -181,31 +181,31 @@ describe("AttendanceRulesEngine - Pruebas Iniciales de Caja Negra", () => {
       expect(result.status).toBe("PUNTUAL");
     });
 
-    // TC-4.06: Tardanza 1s después del inicio (Estática)
-    it("debe ser TARDANZA 1s después del inicio (TC-4.06)", () => {
+    // TC-4.06: Antes era TARDANZA, ahora es PUNTUAL por estar dentro de tolerancia (08:10)
+    it("debe ser PUNTUAL 1s después del inicio pero dentro de tolerancia (TC-4.06)", () => {
       const result = AttendanceRulesEngine.evaluateStudentSwipe(
         { ...baseInput, currentTime: new Date("2026-05-24T08:00:01Z") },
         false,
       );
-      expect(result.status).toBe("TARDANZA");
+      expect(result.status).toBe("PUNTUAL");
     });
 
-    // TC-4.07: Tardanza en el límite exacto (Estática)
-    it("debe ser TARDANZA exactamente en el límite de tolerancia (TC-4.07)", () => {
+    // TC-4.07: PUNTUAL en el límite exacto de tolerancia (Estática)
+    it("debe ser PUNTUAL exactamente en el límite de tolerancia (TC-4.07)", () => {
       const result = AttendanceRulesEngine.evaluateStudentSwipe(
         { ...baseInput, currentTime: new Date("2026-05-24T08:10:00Z") },
         false,
       );
-      expect(result.status).toBe("TARDANZA");
+      expect(result.status).toBe("PUNTUAL");
     });
 
-    // TC-4.08: Falta 1s después del límite (Estática)
-    it("debe ser FALTA 1s después del límite de tolerancia (TC-4.08)", () => {
+    // TC-4.08: TARDANZA 1s después del límite (Estática)
+    it("debe ser TARDANZA 1s después del límite de tolerancia (TC-4.08)", () => {
       const result = AttendanceRulesEngine.evaluateStudentSwipe(
         { ...baseInput, currentTime: new Date("2026-05-24T08:10:01Z") },
         false,
       );
-      expect(result.status).toBe("FALTA");
+      expect(result.status).toBe("TARDANZA");
     });
 
     // TC-4.09 a TC-4.12: Tolerancia Dinámica
@@ -227,28 +227,28 @@ describe("AttendanceRulesEngine - Pruebas Iniciales de Caja Negra", () => {
       expect(result.status).toBe("PUNTUAL");
     });
 
-    it("debe ser TARDANZA 1s después de la llegada del docente (TC-4.10)", () => {
+    it("debe ser PUNTUAL 1s después de la llegada del docente por estar en tolerancia (TC-4.10)", () => {
       const result = AttendanceRulesEngine.evaluateStudentSwipe(
         { ...dynamicInput, currentTime: new Date("2026-05-24T08:05:01Z") },
         false,
       );
-      expect(result.status).toBe("TARDANZA");
+      expect(result.status).toBe("PUNTUAL");
     });
 
-    it("debe ser TARDANZA en el límite recalculado (TC-4.11)", () => {
+    it("debe ser PUNTUAL en el límite recalculado (TC-4.11)", () => {
       const result = AttendanceRulesEngine.evaluateStudentSwipe(
         { ...dynamicInput, currentTime: new Date("2026-05-24T08:15:00Z") },
         false,
       );
-      expect(result.status).toBe("TARDANZA");
+      expect(result.status).toBe("PUNTUAL");
     });
 
-    it("debe ser FALTA 1s después del límite recalculado (TC-4.12)", () => {
+    it("debe ser TARDANZA 1s después del límite recalculado (TC-4.12)", () => {
       const result = AttendanceRulesEngine.evaluateStudentSwipe(
         { ...dynamicInput, currentTime: new Date("2026-05-24T08:15:01Z") },
         false,
       );
-      expect(result.status).toBe("FALTA");
+      expect(result.status).toBe("TARDANZA");
     });
 
     // TC-2.02: Flexibilidad de Grupo (Mismo curso, distinto grupo)
@@ -460,6 +460,25 @@ describe("AttendanceRulesEngine - Pruebas Iniciales de Caja Negra", () => {
       // El segundo estudiante no se altera porque ya tenía registro de salida
       expect(results[1].checkOut).toBe("2026-05-24T08:30:00Z");
       expect(results[1].checkOutType).toBe("NORMAL");
+    });
+
+    it("debe identificar correctamente a los alumnos ausentes", () => {
+      const enrolledStudents: ExternalStudent[] = [
+        { cui: "1", name: "A", enrolledGroupIds: ["G"] },
+        { cui: "2", name: "B", enrolledGroupIds: ["G"] },
+        { cui: "3", name: "C", enrolledGroupIds: ["G"] },
+      ];
+      const existingAttendances = [{ studentCui: "1" }];
+
+      const absentCuis = AttendanceRulesEngine.applyAutomaticAbsences(
+        enrolledStudents,
+        existingAttendances,
+      );
+
+      expect(absentCuis).toContain("2");
+      expect(absentCuis).toContain("3");
+      expect(absentCuis).not.toContain("1");
+      expect(absentCuis.length).toBe(2);
     });
   });
 });

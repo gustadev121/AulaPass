@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { attendances, auditLogs, sessions } from "@/db/schema";
@@ -9,83 +9,146 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const mockTime = searchParams.get("mockTime");
     const teacherCode = searchParams.get("teacherCode");
+    const requestedGroupId = searchParams.get("groupId");
+    const requestedSessionId = searchParams.get("sessionId");
     const now = mockTime ? new Date(mockTime) : new Date();
 
-    const activeSession = await db
-      .select()
-      .from(sessions)
-      .where(eq(sessions.status, "ACTIVE"))
-      .limit(1)
-      .then((res) => res[0]);
+    if (!teacherCode) {
+      return NextResponse.json(
+        { success: false, message: "teacherCode es requerido" },
+        { status: 400 },
+      );
+    }
 
-    if (!activeSession) {
-      // Intentar encontrar clase programada ahora (RF-05, RF-06)
-      const schedules = await UniversityService.getClassroomSchedule();
+    // 1. Obtener todos los grupos del docente
+    const teacherGroups =
+      await UniversityService.getGroupsByTeacher(teacherCode);
+
+    if (teacherGroups.length === 0) {
+      return NextResponse.json({
+        active: false,
+        groups: [],
+        message: "No se encontraron grupos para este docente.",
+      });
+    }
+
+    // 2. Determinar el grupo seleccionado (por defecto: el actual o próximo)
+    let selectedGroup = teacherGroups.find((g) => g.id === requestedGroupId);
+
+    if (!selectedGroup) {
+      // Buscar si hay alguno con sesión activa en este momento
       const currentDay = now.getDay();
       const mappedDay = currentDay === 0 ? 7 : currentDay;
 
       let matchedGroup = null;
-      for (const item of schedules) {
-        if (item.schedule.dayOfWeek === mappedDay) {
+      for (const group of teacherGroups) {
+        const schedule = group.schedules.find((s) => s.dayOfWeek === mappedDay);
+        if (schedule) {
           const { expectedStart, expectedEnd } =
             UniversityService.getDatesForSchedule(
               now,
-              item.schedule.startTime,
-              item.schedule.endTime,
+              schedule.startTime,
+              schedule.endTime,
             );
 
-          // Margen de 30 min antes del inicio (como en swipe)
           const earliestStart = new Date(
             expectedStart.getTime() - 30 * 60 * 1000,
           );
 
           if (now >= earliestStart && now <= expectedEnd) {
-            // Si se proporciona teacherCode, debe coincidir
-            if (!teacherCode || item.group.teacherCode === teacherCode) {
-              matchedGroup = item.group;
-              break;
-            }
+            matchedGroup = group;
+            break;
           }
         }
       }
 
       if (matchedGroup) {
-        return NextResponse.json({
-          active: false,
-          session: null,
-          group: matchedGroup,
-        });
-      }
+        selectedGroup = matchedGroup;
+      } else {
+        // Buscar el más próximo
+        const upcomingGroups = teacherGroups.map((g) => {
+          let minDiff = Number.MAX_SAFE_INTEGER;
+          for (const s of g.schedules) {
+            let dayDiff = s.dayOfWeek - mappedDay;
+            if (dayDiff < 0) dayDiff += 7;
 
-      return NextResponse.json({ active: false, session: null });
+            const [h, m] = s.startTime.split(":").map(Number);
+            const target = new Date(now);
+            target.setDate(now.getDate() + dayDiff);
+            target.setHours(h, m, 0, 0);
+
+            const diff = target.getTime() - now.getTime();
+            if (diff > 0 && diff < minDiff) minDiff = diff;
+          }
+          return { group: g, diff: minDiff };
+        });
+
+        upcomingGroups.sort((a, b) => a.diff - b.diff);
+        selectedGroup = upcomingGroups[0]?.group || teacherGroups[0];
+      }
     }
 
-    const group = await UniversityService.getGroupById(activeSession.groupId);
-    const sessionAttendances = await db
+    // 3. Obtener todas las sesiones del grupo seleccionado
+    const groupSessions = await db
       .select()
-      .from(attendances)
-      .where(eq(attendances.sessionId, activeSession.id));
+      .from(sessions)
+      .where(eq(sessions.groupId, selectedGroup.id))
+      .orderBy(sessions.date, sessions.expectedStart);
 
-    // Cruzar con UniversityService para obtener nombres (Join manual)
-    const attendancesWithNames = await Promise.all(
-      sessionAttendances.map(async (att) => {
-        const student = await UniversityService.getStudentByCui(att.studentCui);
-        return {
-          ...att,
-          name: student?.name || "Estudiante no encontrado",
-        };
-      }),
-    );
+    // 4. Determinar la sesión seleccionada
+    let activeSession = null;
+    if (requestedSessionId) {
+      activeSession =
+        groupSessions.find((s) => s.id === requestedSessionId) || null;
+    }
 
-    const sessionAuditLogs = await db
-      .select()
-      .from(auditLogs)
-      .where(eq(auditLogs.sessionId, activeSession.id));
+    if (!activeSession) {
+      // Por defecto: la sesión ACTIVE o la más reciente hoy
+      activeSession = groupSessions.find((s) => s.status === "ACTIVE") || null;
+
+      if (!activeSession && groupSessions.length > 0) {
+        // Si no hay activa, intentar la que coincide con el horario actual
+        const dateString = now.toISOString().split("T")[0];
+        activeSession =
+          groupSessions.find((s) => s.date === dateString) ||
+          groupSessions[groupSessions.length - 1];
+      }
+    }
+
+    let attendancesWithNames = [];
+    let sessionAuditLogs = [];
+
+    if (activeSession) {
+      const sessionAttendances = await db
+        .select()
+        .from(attendances)
+        .where(eq(attendances.sessionId, activeSession.id));
+
+      // Cruzar con UniversityService para obtener nombres
+      attendancesWithNames = await Promise.all(
+        sessionAttendances.map(async (att) => {
+          const student = await UniversityService.getStudentByCui(
+            att.studentCui,
+          );
+          return {
+            ...att,
+            name: student?.name || "Estudiante no encontrado",
+          };
+        }),
+      );
+
+      sessionAuditLogs = await db
+        .select()
+        .from(auditLogs)
+        .where(eq(auditLogs.sessionId, activeSession.id));
+    }
 
     return NextResponse.json({
-      active: true,
+      active: !!activeSession,
       session: activeSession,
-      group,
+      group: selectedGroup,
+      groups: teacherGroups,
+      sessions: groupSessions,
       attendances: attendancesWithNames,
       auditLogs: sessionAuditLogs,
     });
@@ -93,7 +156,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        message: `Error al obtener la sesión activa: ${error instanceof Error ? error.message : "Desconocido"}`,
+        message: `Error al obtener datos del panel: ${error instanceof Error ? error.message : "Desconocido"}`,
       },
       { status: 500 },
     );
@@ -109,13 +172,16 @@ export async function POST(request: NextRequest) {
     const now = date ? new Date(date) : new Date();
     const dateString = now.toISOString().split("T")[0];
 
-    // Buscar si ya existe una sesión activa
+    // Buscar si ya existe una sesión activa (excluyendo Hora Hueco)
     const activeSession = await db
       .select()
       .from(sessions)
-      .where(eq(sessions.status, "ACTIVE"))
+      .where(
+        and(eq(sessions.status, "ACTIVE"), ne(sessions.groupId, "HORA_HUECO")),
+      )
       .limit(1)
       .then((res) => res[0]);
+
 
     if (activeSession) {
       // Actualizar sesión activa existente

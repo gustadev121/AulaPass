@@ -6,9 +6,10 @@ import { useCallback, useEffect, useState } from "react";
 interface AttendanceRecord {
   id: string;
   studentCui: string;
-  name?: string; // Vendrá del UniversityService en un mundo ideal, pero aquí lo manejamos
+  name?: string;
   checkIn: string;
   status: "PUNTUAL" | "TARDANZA" | "FALTA" | "AMBIENTE_ESTUDIO";
+  observation?: string | null;
 }
 
 interface Session {
@@ -44,8 +45,10 @@ export default function TeacherPanel({
   teacherData,
   onLogout,
 }: TeacherPanelProps) {
-  const [activeSession, setActiveSession] = useState<Session | null>(null);
+  const [selectedSession, setSelectedSession] = useState<Session | null>(null);
   const [group, setGroup] = useState<Group | null>(null);
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [availableSessions, setAvailableSessions] = useState<Session[]>([]);
   const [attendances, setAttendances] = useState<AttendanceRecord[]>([]);
   const [toleranceMode, setToleranceMode] = useState<"STATIC" | "DYNAMIC">(
     "STATIC",
@@ -60,33 +63,53 @@ export default function TeacherPanel({
 
   const [searchTerm, setSearchTerm] = useState("");
 
-  const fetchSessionData = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const response = await fetch(
-        `/api/teacher/session?teacherCode=${teacherData.code}`,
-      );
-      const data = await response.json();
-      if (data.group) {
-        setGroup(data.group);
+  const fetchSessionData = useCallback(
+    async (selectedGroupId?: string, selectedSessionId?: string) => {
+      setIsLoading(true);
+      try {
+        let url = `/api/teacher/session?teacherCode=${teacherData.code}`;
+        if (selectedGroupId) url += `&groupId=${selectedGroupId}`;
+        if (selectedSessionId) url += `&sessionId=${selectedSessionId}`;
+
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.groups) {
+          setGroups(data.groups);
+        }
+        if (data.group) {
+          setGroup(data.group);
+        }
+        if (data.sessions) {
+          setAvailableSessions(data.sessions);
+        }
+
+        setSelectedSession(data.session || null);
+        setAttendances(data.attendances || []);
+
+        if (data.session) {
+          setToleranceMode(data.session.toleranceType);
+        }
+      } catch (_error) {
+        setMessage("Error al cargar datos del panel.");
+      } finally {
+        setIsLoading(false);
       }
-      if (data.active) {
-        setActiveSession(data.session);
-        setAttendances(data.attendances);
-        setToleranceMode(data.session.toleranceType);
-        // Podríamos inferir los minutos si tuviéramos ese dato guardado,
-        // por ahora dejamos el default de 15.
-      }
-    } catch (_error) {
-      // console.error("Error fetching session:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [teacherData.code]);
+    },
+    [teacherData.code],
+  );
 
   useEffect(() => {
     fetchSessionData();
   }, [fetchSessionData]);
+
+  const handleGroupChange = (newGroupId: string) => {
+    fetchSessionData(newGroupId);
+  };
+
+  const handleSessionChange = (newSessionId: string) => {
+    fetchSessionData(group?.id, newSessionId);
+  };
 
   const handleUpdateConfig = async () => {
     try {
@@ -94,7 +117,7 @@ export default function TeacherPanel({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          groupId: activeSession ? activeSession.groupId : group?.id,
+          groupId: selectedSession ? selectedSession.groupId : group?.id,
           toleranceType: toleranceMode,
           toleranceMinutes: toleranceMinutes,
         }),
@@ -102,11 +125,11 @@ export default function TeacherPanel({
       const data = await response.json();
       if (data.success) {
         setMessage(
-          activeSession
+          selectedSession
             ? "Configuración actualizada."
             : "Sesión iniciada manualmente.",
         );
-        setActiveSession(data.session);
+        setSelectedSession(data.session);
         if (data.session.toleranceType) {
           setToleranceMode(data.session.toleranceType);
         }
@@ -123,8 +146,8 @@ export default function TeacherPanel({
     newStatus: AttendanceRecord["status"],
     studentName?: string,
   ) => {
-    if (!activeSession) {
-      setMessage("No hay sesión activa.");
+    if (!selectedSession) {
+      setMessage("No hay sesión seleccionada.");
       return;
     }
     try {
@@ -134,7 +157,7 @@ export default function TeacherPanel({
         body: JSON.stringify({
           operation: "UPDATE",
           studentCui,
-          sessionId: activeSession.id,
+          sessionId: selectedSession.id,
           newStatus,
           reason: "Corrección manual por docente",
           actorCode: teacherData.code,
@@ -142,7 +165,7 @@ export default function TeacherPanel({
       });
       const data = await response.json();
       if (data.success) {
-        fetchSessionData(); // Recargar datos
+        fetchSessionData(group?.id, selectedSession.id); // Recargar datos de la misma sesión
         setMessage(`Estado de ${studentName || studentCui} actualizado.`);
       }
     } catch (_error) {
@@ -154,8 +177,8 @@ export default function TeacherPanel({
     studentCui: string,
     studentName?: string,
   ) => {
-    if (!activeSession) {
-      setMessage("No hay sesión activa.");
+    if (!selectedSession) {
+      setMessage("No hay sesión seleccionada.");
       return;
     }
     if (
@@ -170,14 +193,14 @@ export default function TeacherPanel({
         body: JSON.stringify({
           operation: "DELETE",
           studentCui,
-          sessionId: activeSession.id,
+          sessionId: selectedSession.id,
           reason: "Anulación manual por docente",
           actorCode: teacherData.code,
         }),
       });
       const data = await response.json();
       if (data.success) {
-        fetchSessionData();
+        fetchSessionData(group?.id, selectedSession.id);
         setMessage(`Registro de ${studentName || studentCui} anulado.`);
       } else {
         setMessage(data.message || "Error al anular registro.");
@@ -195,8 +218,8 @@ export default function TeacherPanel({
 
   const handleCreateAttendance = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeSession) {
-      setMessage("No hay sesión activa.");
+    if (!selectedSession) {
+      setMessage("No hay sesión seleccionada.");
       return;
     }
 
@@ -207,7 +230,7 @@ export default function TeacherPanel({
         body: JSON.stringify({
           operation: "CREATE",
           studentCui: newStudentCui,
-          sessionId: activeSession.id,
+          sessionId: selectedSession.id,
           newStatus,
           reason: newReason,
           actorCode: teacherData.code,
@@ -218,7 +241,7 @@ export default function TeacherPanel({
         setNewStudentCui("");
         setNewStatus("FALTA");
         setNewReason("Registro manual por docente");
-        fetchSessionData();
+        fetchSessionData(group?.id, selectedSession.id);
         setMessage(`Registro creado para ${newStudentCui}.`);
       } else {
         setMessage(data.message || "Error al crear registro.");
@@ -229,7 +252,7 @@ export default function TeacherPanel({
   };
 
   const handleCloseSession = async () => {
-    if (!activeSession) {
+    if (!selectedSession) {
       setMessage("No hay sesión activa.");
       return;
     }
@@ -244,7 +267,7 @@ export default function TeacherPanel({
       const response = await fetch("/api/teacher/session/close", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: activeSession?.id }),
+        body: JSON.stringify({ sessionId: selectedSession?.id }),
       });
       const data = await response.json();
       if (data.success) {
@@ -264,7 +287,7 @@ export default function TeacherPanel({
       });
       const data = await response.json();
       if (data.success) {
-        setActiveSession(data.session);
+        setSelectedSession(data.session);
         setMessage("Modo virtual activado.");
       }
     } catch (_error) {
@@ -279,6 +302,8 @@ export default function TeacherPanel({
       </div>
     );
 
+  const isCurrentSessionActive = selectedSession?.status === "ACTIVE";
+
   return (
     <div className="p-8 max-w-7xl mx-auto bg-gray-50 min-h-screen text-gray-900">
       <header className="mb-8 flex justify-between items-end border-b pb-4">
@@ -286,10 +311,36 @@ export default function TeacherPanel({
           <h1 className="text-3xl font-bold text-gray-800">
             Panel Docente - AulaPass
           </h1>
-          <p className="text-gray-500 mt-1">
-            Docente: {teacherData.name} | Curso: {group?.courseId || "N/A"} -{" "}
-            {group?.courseName || "N/A"} | Aula: {group?.classroom || "101"}
-          </p>
+          <div className="flex items-center gap-4 mt-2">
+            <div>
+              <label
+                htmlFor="group-select"
+                className="block text-xs font-medium text-gray-500 uppercase"
+              >
+                Grupo a Gestionar
+              </label>
+              <select
+                id="group-select"
+                value={group?.id || ""}
+                onChange={(e) => handleGroupChange(e.target.value)}
+                className="mt-1 block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm py-1"
+              >
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.courseId} - {g.courseName} ({g.id})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-gray-500 uppercase">
+                Aula
+              </p>
+              <p className="text-sm font-semibold text-gray-700">
+                {group?.classroom || "101"}
+              </p>
+            </div>
+          </div>
           {message && (
             <p className="text-blue-600 font-semibold mt-2">{message}</p>
           )}
@@ -306,7 +357,12 @@ export default function TeacherPanel({
           <button
             type="button"
             onClick={handleCloseSession}
-            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium"
+            disabled={!isCurrentSessionActive}
+            className={`px-4 py-2 rounded-lg transition font-medium ${
+              isCurrentSessionActive
+                ? "bg-red-600 text-white hover:bg-red-700"
+                : "bg-gray-200 text-gray-400 cursor-not-allowed"
+            }`}
             title="Finaliza la clase actual y registra la salida de todos los alumnos"
           >
             Finalizar Clase
@@ -331,10 +387,11 @@ export default function TeacherPanel({
               <select
                 id="tolerance-mode"
                 value={toleranceMode}
+                disabled={!isCurrentSessionActive}
                 onChange={(e) =>
                   setToleranceMode(e.target.value as "STATIC" | "DYNAMIC")
                 }
-                className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
               >
                 <option value="STATIC">Estática (Desde inicio oficial)</option>
                 <option value="DYNAMIC">Dinámica (Desde mi ingreso)</option>
@@ -351,10 +408,11 @@ export default function TeacherPanel({
                 id="tolerance-minutes"
                 type="number"
                 value={toleranceMinutes}
+                disabled={!isCurrentSessionActive}
                 onChange={(e) =>
                   setToleranceMinutes(Number.parseInt(e.target.value, 10))
                 }
-                className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
                 min="0"
                 max="60"
               />
@@ -362,9 +420,14 @@ export default function TeacherPanel({
             <button
               type="button"
               onClick={handleUpdateConfig}
-              className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition"
+              disabled={!isCurrentSessionActive && selectedSession !== null}
+              className={`w-full py-2 rounded-lg transition ${
+                isCurrentSessionActive || selectedSession === null
+                  ? "bg-blue-600 text-white hover:bg-blue-700"
+                  : "bg-gray-200 text-gray-400 cursor-not-allowed"
+              }`}
             >
-              Aplicar Ajustes
+              {selectedSession ? "Aplicar Ajustes" : "Iniciar Sesión Manual"}
             </button>
           </div>
         </div>
@@ -399,10 +462,10 @@ export default function TeacherPanel({
             <p className="text-sm text-gray-500 uppercase tracking-wide">
               Modo Contingencia
             </p>
-            {activeSession?.virtualCode ? (
+            {selectedSession?.virtualCode ? (
               <div className="mt-2">
                 <p className="text-2xl font-mono font-bold text-purple-600">
-                  {activeSession.virtualCode}
+                  {selectedSession.virtualCode}
                 </p>
                 <p className="text-xs text-gray-400">Código de Acceso Remoto</p>
               </div>
@@ -410,7 +473,12 @@ export default function TeacherPanel({
               <button
                 type="button"
                 onClick={handleActivateVirtual}
-                className="mt-2 px-4 py-1 text-sm border border-purple-600 text-purple-600 rounded-md hover:bg-purple-50 font-medium"
+                disabled={!isCurrentSessionActive}
+                className={`mt-2 px-4 py-1 text-sm border rounded-md font-medium transition ${
+                  isCurrentSessionActive
+                    ? "border-purple-600 text-purple-600 hover:bg-purple-50"
+                    : "border-gray-300 text-gray-400 cursor-not-allowed"
+                }`}
                 title="Habilita un código para que los alumnos marquen asistencia desde sus dispositivos si el QR físico falla"
               >
                 Habilitar Código Virtual
@@ -421,9 +489,25 @@ export default function TeacherPanel({
 
         {/* Alta rápida de asistencia manual (RF-14) */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 col-span-1 md:col-span-3">
-          <h2 className="text-lg font-semibold mb-4 text-gray-700">
-            Registro Manual de Asistencia (Excepción/Contingencia)
-          </h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold text-gray-700">
+              Registro Manual de Asistencia (Excepción/Contingencia)
+            </h2>
+            {selectedSession && (
+              <span
+                className={`px-3 py-1 rounded-lg text-sm font-bold ${
+                  isCurrentSessionActive
+                    ? "bg-green-100 text-green-700"
+                    : "bg-amber-100 text-amber-700"
+                }`}
+                suppressHydrationWarning
+              >
+                {isCurrentSessionActive
+                  ? "Sesión Activa"
+                  : `Sesión: ${new Date(selectedSession.date).toLocaleDateString()} ${new Date(selectedSession.expectedStart).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
+              </span>
+            )}
+          </div>
           <form
             onSubmit={handleCreateAttendance}
             className="grid grid-cols-1 md:grid-cols-4 gap-4"
@@ -470,16 +554,46 @@ export default function TeacherPanel({
       {/* Cuadrícula de Modificación de Asistencia (RF-14) */}
       <section className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
-          <h2 className="text-lg font-semibold text-gray-700">
-            Control Detallado de Asistencia
-          </h2>
+          <div className="flex items-center gap-4">
+            <h2 className="text-lg font-semibold text-gray-700">
+              Control Detallado de Asistencia
+            </h2>
+            <div className="flex items-center gap-2">
+              <label
+                htmlFor="session-select"
+                className="text-xs font-medium text-gray-500 uppercase"
+              >
+                Sesión:
+              </label>
+              <select
+                id="session-select"
+                value={selectedSession?.id || ""}
+                onChange={(e) => handleSessionChange(e.target.value)}
+                className="text-sm border-gray-300 rounded shadow-sm focus:ring-blue-500 focus:border-blue-500 py-1"
+              >
+                {availableSessions.length === 0 && (
+                  <option value="">Sin sesiones registradas</option>
+                )}
+                {availableSessions.map((s) => (
+                  <option key={s.id} value={s.id} suppressHydrationWarning>
+                    {new Date(s.date).toLocaleDateString()} -{" "}
+                    {new Date(s.expectedStart).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}{" "}
+                    ({s.status})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
           <div className="flex space-x-2">
             <button
               type="button"
-              onClick={fetchSessionData}
+              onClick={() => fetchSessionData(group?.id, selectedSession?.id)}
               className="text-sm text-blue-600 hover:underline font-medium"
             >
-              Refrescar Lista
+              Refrescar
             </button>
             <input
               type="text"
@@ -498,6 +612,7 @@ export default function TeacherPanel({
                 <th className="px-6 py-4">Estudiante</th>
                 <th className="px-6 py-4">Hora de Registro</th>
                 <th className="px-6 py-4">Estado Actual</th>
+                <th className="px-6 py-4">Motivo / Obs.</th>
                 <th className="px-6 py-4">Acciones de Corrección</th>
               </tr>
             </thead>
@@ -510,7 +625,7 @@ export default function TeacherPanel({
                   <td className="px-6 py-4 text-gray-600">
                     {record.name || "Sin nombre registrado"}
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-6 py-4" suppressHydrationWarning>
                     {new Date(record.checkIn).toLocaleTimeString()}
                   </td>
                   <td className="px-6 py-4">
@@ -527,6 +642,12 @@ export default function TeacherPanel({
                     >
                       {record.status}
                     </span>
+                  </td>
+                  <td
+                    className="px-6 py-4 italic text-xs text-gray-500 max-w-xs truncate"
+                    title={record.observation || ""}
+                  >
+                    {record.observation || "-"}
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
@@ -566,7 +687,7 @@ export default function TeacherPanel({
               {filteredAttendances.length === 0 && (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={6}
                     className="px-6 py-8 text-center text-gray-500"
                   >
                     No se encontraron marcaciones para los criterios de
