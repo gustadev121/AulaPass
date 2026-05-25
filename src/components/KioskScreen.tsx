@@ -1,33 +1,37 @@
-'use client';
+"use client";
 
-import React, { useState, useRef, useEffect } from 'react';
-import { identifierSchema } from '../lib/validations';
+import React, { useState, useRef, useEffect } from "react";
+import { identifierSchema } from "../lib/validations";
 
-type ScreenState = 'IDLE' | 'GREEN' | 'AMBER' | 'BLUE' | 'RED';
+type ScreenState = "IDLE" | "GREEN" | "AMBER" | "BLUE" | "RED";
 
-export default function KioskScreen({ onTeacherLogin }: { onTeacherLogin: (teacherData: any) => void }) {
-  const [inputValue, setInputValue] = useState('');
-  const [screenState, setScreenState] = useState<ScreenState>('IDLE');
-  const [message, setMessage] = useState('Ingrese su CUI o DNI');
+export default function KioskScreen({
+  onTeacherLogin,
+}: {
+  onTeacherLogin: (teacherData: any) => void;
+}) {
+  const [inputValue, setInputValue] = useState("");
+  const [screenState, setScreenState] = useState<ScreenState>("IDLE");
+  const [message, setMessage] = useState("Ingrese su CUI o DNI");
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
-  const [loginCui, setLoginCui] = useState('');
-  const [loginError, setLoginError] = useState('');
+  const [loginCui, setLoginCui] = useState("");
+  const [loginError, setLoginError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Auto-enfoque persistente (RF-01)
   useEffect(() => {
-    if (screenState === 'IDLE' && !isLoginModalOpen) {
+    if (screenState === "IDLE" && !isLoginModalOpen) {
       inputRef.current?.focus();
     }
   }, [screenState, isLoginModalOpen]);
 
   // Temporizador de 3 segundos (RF-16)
   useEffect(() => {
-    if (screenState !== 'IDLE') {
+    if (screenState !== "IDLE") {
       const timer = setTimeout(() => {
-        setScreenState('IDLE');
-        setInputValue('');
-        setMessage('Ingrese su CUI o DNI');
+        setScreenState("IDLE");
+        setInputValue("");
+        setMessage("Ingrese su CUI o DNI");
       }, 3000);
       return () => clearTimeout(timer);
     }
@@ -37,19 +41,19 @@ export default function KioskScreen({ onTeacherLogin }: { onTeacherLogin: (teach
   useEffect(() => {
     const checkAbsence = async () => {
       try {
-        const response = await fetch('/api/teacher/session/check-absence', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ maxTeacherDelayMinutes: 20 })
+        const response = await fetch("/api/teacher/session/check-absence", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ maxTeacherDelayMinutes: 20 }),
         });
         const data = await response.json();
-        
+
         if (data.suspended) {
-          setScreenState('RED');
-          setMessage('Clase Suspendida: Inasistencia Docente');
+          setScreenState("RED");
+          setMessage("Clase Suspendida: Inasistencia Docente");
         }
       } catch (error) {
-        console.error('Error in absence polling:', error);
+        console.error("Error in absence polling:", error);
       }
     };
 
@@ -62,77 +66,93 @@ export default function KioskScreen({ onTeacherLogin }: { onTeacherLogin: (teach
 
     const validation = identifierSchema.safeParse(inputValue);
     if (!validation.success) {
-      setScreenState('RED');
-      setMessage('Formato inválido. Ingrese 8 dígitos numéricos.');
+      setScreenState("RED");
+      setMessage("Formato inválido. Ingrese 8 dígitos numéricos.");
       return;
     }
 
     try {
-      const response = await fetch('/api/kiosk/swipe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ DniCui: inputValue })
+      const response = await fetch("/api/kiosk/swipe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ DniCui: inputValue }),
       });
-      
+
       const data = await response.json();
-      
+
       if (data.color) {
         setScreenState(data.color as ScreenState);
       } else {
-        setScreenState(data.success ? 'GREEN' : 'RED');
+        setScreenState(data.success ? "GREEN" : "RED");
       }
-      
-      setMessage(data.message || (data.success ? 'Registro exitoso' : 'Error en el registro'));
-      
-      if (data.role === 'TEACHER') {
-          console.log('Docente detectado:', data.name);
+
+      setMessage(
+        data.message ||
+          (data.success ? "Registro exitoso" : "Error en el registro"),
+      );
+
+      if (data.role === "TEACHER") {
+        console.log("Docente detectado:", data.name);
       }
     } catch (error) {
-      setScreenState('RED');
-      setMessage('Error de conexión con el servidor.');
+      setScreenState("RED");
+      setMessage("Error de conexión con el servidor.");
     }
   };
 
   const handleTeacherLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoginError('');
-    
+    setLoginError("");
+
     try {
-      const response = await fetch('/api/kiosk/swipe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ DniCui: loginCui })
+      const response = await fetch("/api/kiosk/swipe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ DniCui: loginCui }),
       });
-      
+
       const data = await response.json();
-      
-      if (data.success && data.role === 'TEACHER') {
+
+      if (data.success && data.role === "TEACHER") {
         onTeacherLogin(data);
       } else {
-        setLoginError('Identificador no válido para acceso docente.');
+        setLoginError("Identificador no válido para acceso docente.");
       }
     } catch (error) {
-      setLoginError('Error de conexión.');
+      setLoginError("Error de conexión.");
     }
   };
 
   const bgColors = {
-    IDLE: 'bg-gray-50 text-gray-900',
-    GREEN: 'bg-green-500 text-white',
-    AMBER: 'bg-amber-500 text-white',
-    BLUE: 'bg-blue-500 text-white',
-    RED: 'bg-red-500 text-white',
+    IDLE: "bg-gray-50 text-gray-900",
+    GREEN: "bg-green-500 text-white",
+    AMBER: "bg-amber-500 text-white",
+    BLUE: "bg-blue-500 text-white",
+    RED: "bg-red-500 text-white",
   };
 
   return (
-    <div className={`min-h-screen flex flex-col items-center justify-center transition-colors duration-200 ${bgColors[screenState]}`}>
-      <button 
+    <div
+      className={`min-h-screen flex flex-col items-center justify-center transition-colors duration-200 ${bgColors[screenState]}`}
+    >
+      <button
         onClick={() => setIsLoginModalOpen(true)}
         className="absolute bottom-4 right-4 w-8 h-8 opacity-10 hover:opacity-100 transition-opacity text-gray-400 focus:outline-none"
         title="Acceso Docente"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25-2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          strokeWidth={1.5}
+          stroke="currentColor"
+          className="w-6 h-6"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25-2.25v6.75a2.25 2.25 0 002.25 2.25z"
+          />
         </svg>
       </button>
 
@@ -142,7 +162,9 @@ export default function KioskScreen({ onTeacherLogin }: { onTeacherLogin: (teach
             <h2 className="text-2xl font-bold mb-4">Acceso Docente</h2>
             <form onSubmit={handleTeacherLogin} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">CUI o DNI del Docente</label>
+                <label className="block text-sm font-medium text-gray-700">
+                  CUI o DNI del Docente
+                </label>
                 <input
                   type="text"
                   value={loginCui}
@@ -152,16 +174,18 @@ export default function KioskScreen({ onTeacherLogin }: { onTeacherLogin: (teach
                   autoFocus
                 />
               </div>
-              {loginError && <p className="text-red-600 text-sm">{loginError}</p>}
+              {loginError && (
+                <p className="text-red-600 text-sm">{loginError}</p>
+              )}
               <div className="flex justify-end space-x-3">
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   onClick={() => setIsLoginModalOpen(false)}
                   className="px-4 py-2 text-gray-600 hover:text-gray-800"
                 >
                   Cancelar
                 </button>
-                <button 
+                <button
                   type="submit"
                   className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
                 >
@@ -175,21 +199,23 @@ export default function KioskScreen({ onTeacherLogin }: { onTeacherLogin: (teach
 
       <div className="text-center space-y-8">
         <h1 className="text-6xl font-bold tracking-tight">{message}</h1>
-        
-        {screenState === 'IDLE' && (
+
+        {screenState === "IDLE" && (
           <form onSubmit={handleSubmit} className="mt-8">
             <input
               ref={inputRef}
               type="text"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              disabled={screenState !== 'IDLE'}
+              disabled={screenState !== "IDLE"}
               className="text-center text-5xl p-6 border-4 border-gray-300 rounded-2xl shadow-lg focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-200 w-full max-w-lg transition-all"
               placeholder="12345678"
               maxLength={8}
               autoComplete="off"
             />
-            <button type="submit" className="hidden">Registrar</button>
+            <button type="submit" className="hidden">
+              Registrar
+            </button>
           </form>
         )}
       </div>

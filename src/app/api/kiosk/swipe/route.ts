@@ -8,32 +8,30 @@ import {
   type ExternalGroup,
   UniversityService,
 } from "@/lib/university-service";
+import { identifierSchema } from "@/lib/validations";
 
 // Esquema de validación del CUI/DNI (RF-01, RF-03)
 const swipeSchema = z.object({
-  DniCui: z
-    .string()
-    .transform((val) => val.trim())
-    .refine((val) => /^\d{8}$/.test(val), {
-      message: "El CUI/DNI debe contener exactamente 8 dígitos numéricos.",
-    }),
+  DniCui: identifierSchema,
   mockTime: z.string().optional(), // Inyección de tiempo para simulación/pruebas
 });
+
+const DUPLICATE_WINDOW_MS = 50;
+const recentStudentSwipes = new Map<string, number>();
 
 function getDatesForSchedule(
   currentTime: Date,
   startTimeStr: string,
   endTimeStr: string,
 ) {
-  const year = currentTime.getFullYear();
-  const month = currentTime.getMonth();
-  const date = currentTime.getDate();
-
   const [startH, startM] = startTimeStr.split(":").map(Number);
   const [endH, endM] = endTimeStr.split(":").map(Number);
 
-  const expectedStart = new Date(year, month, date, startH, startM, 0, 0);
-  const expectedEnd = new Date(year, month, date, endH, endM, 0, 0);
+  const expectedStart = new Date(currentTime);
+  expectedStart.setHours(startH, startM, 0, 0);
+
+  const expectedEnd = new Date(currentTime);
+  expectedEnd.setHours(endH, endM, 0, 0);
 
   return { expectedStart, expectedEnd };
 }
@@ -187,6 +185,24 @@ export async function POST(request: NextRequest) {
     // 2. Verificar si es Estudiante (RF-04)
     const student = await UniversityService.getStudentByCui(DniCui);
     if (student) {
+      const lastSwipeAt = recentStudentSwipes.get(student.cui);
+      if (lastSwipeAt !== undefined) {
+        const deltaMs = now.getTime() - lastSwipeAt;
+        if (deltaMs >= 0 && deltaMs <= DUPLICATE_WINDOW_MS) {
+          return NextResponse.json(
+            {
+              success: false,
+              color: "RED",
+              message:
+                "Marcación duplicada detectada. Espere unos segundos e intente nuevamente.",
+            },
+            { status: 429 },
+          );
+        }
+      }
+
+      recentStudentSwipes.set(student.cui, now.getTime());
+
       // Buscar si existe una sesión de clase activa en la base de datos local
       const activeSession = await db
         .select()
@@ -357,6 +373,10 @@ export async function POST(request: NextRequest) {
       let matchedSchedule = null;
       let matchedGroup = null;
 
+      console.log(
+        `[DEBUG] Attempting to match schedule for student ${DniCui}, total schedules: ${classroomSchedules.length}, mappedDay: ${mappedDay}`,
+      );
+
       for (const item of classroomSchedules) {
         if (item.schedule.dayOfWeek === mappedDay) {
           const { expectedStart, expectedEnd } = getDatesForSchedule(
@@ -367,7 +387,9 @@ export async function POST(request: NextRequest) {
           const earliestStart = new Date(
             expectedStart.getTime() - 30 * 60 * 1000,
           );
-
+          console.log(
+            `[DEBUG] Comparing schedule ${item.schedule.startTime}-${item.schedule.endTime}, earliestStart: ${earliestStart.toISOString()}, expectedEnd: ${expectedEnd.toISOString()}, now: ${now.toISOString()}`,
+          );
           if (now >= earliestStart && now <= expectedEnd) {
             // Verificar si el estudiante está matriculado en esta asignatura
             const group = await UniversityService.getGroupById(item.groupId);
@@ -385,6 +407,9 @@ export async function POST(request: NextRequest) {
 
               const isEnrolled = student.enrolledGroupIds.some((sgid) =>
                 courseGroups.some((cg) => cg.id === sgid),
+              );
+              console.log(
+                `[DEBUG] Student: ${student.cui}, isEnrolled: ${isEnrolled}, studentGroups: ${JSON.stringify(student.enrolledGroupIds)}, courseGroups: ${JSON.stringify(courseGroups.map((g) => g.id))}`,
               );
 
               if (isEnrolled) {

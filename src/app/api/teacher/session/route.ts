@@ -23,6 +23,17 @@ export async function GET(_request: NextRequest) {
       .from(attendances)
       .where(eq(attendances.sessionId, activeSession.id));
 
+    // Cruzar con UniversityService para obtener nombres (Join manual)
+    const attendancesWithNames = await Promise.all(
+      sessionAttendances.map(async (att) => {
+        const student = await UniversityService.getStudentByCui(att.studentCui);
+        return {
+          ...att,
+          name: student?.name || "Estudiante no encontrado",
+        };
+      }),
+    );
+
     const sessionAuditLogs = await db
       .select()
       .from(auditLogs)
@@ -32,7 +43,7 @@ export async function GET(_request: NextRequest) {
       active: true,
       session: activeSession,
       group,
-      attendances: sessionAttendances,
+      attendances: attendancesWithNames,
       auditLogs: sessionAuditLogs,
     });
   } catch (error) {

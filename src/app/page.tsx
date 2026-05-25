@@ -1,26 +1,26 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import KioskScreen from '@/components/KioskScreen';
-import TeacherPanel from '@/components/TeacherPanel';
+import { useState } from "react";
+import KioskScreen from "@/components/KioskScreen";
+import TeacherPanel from "@/components/TeacherPanel";
 
 export default function Home() {
-  const [view, setView] = useState<'KIOSK' | 'TEACHER'>('KIOSK');
+  const [view, setView] = useState<"KIOSK" | "TEACHER">("KIOSK");
   const [teacherData, setTeacherData] = useState<any>(null);
 
   const handleTeacherLogin = (data: any) => {
     setTeacherData(data);
-    setView('TEACHER');
+    setView("TEACHER");
   };
 
   const handleLogout = () => {
     setTeacherData(null);
-    setView('KIOSK');
+    setView("KIOSK");
   };
 
   return (
     <main className="min-h-screen">
-      {view === 'KIOSK' ? (
+      {view === "KIOSK" ? (
         <KioskScreen onTeacherLogin={handleTeacherLogin} />
       ) : (
         <TeacherPanel teacherData={teacherData} onLogout={handleLogout} />

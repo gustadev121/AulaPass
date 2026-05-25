@@ -5,9 +5,10 @@ import { db } from "@/db";
 import { attendances, sessions } from "@/db/schema";
 import { AttendanceRulesEngine } from "@/lib/attendance-rules";
 import { UniversityService } from "@/lib/university-service";
+import { identifierSchema } from "@/lib/validations";
 
 const virtualSwipeSchema = z.object({
-  DniCui: z.string().regex(/^\d{8}$/, "CUI/DNI inválido"),
+  DniCui: identifierSchema,
   virtualCode: z.string().regex(/^\d{6}$/, "Código virtual inválido"),
 });
 
@@ -17,7 +18,10 @@ export async function POST(request: NextRequest) {
     const parseResult = virtualSwipeSchema.safeParse(body);
 
     if (!parseResult.success) {
-      return NextResponse.json({ success: false, message: parseResult.error.errors[0].message }, { status: 400 });
+      return NextResponse.json(
+        { success: false, message: parseResult.error.issues[0].message },
+        { status: 400 },
+      );
     }
 
     const { DniCui, virtualCode } = parseResult.data;
@@ -27,30 +31,52 @@ export async function POST(request: NextRequest) {
     const session = await db
       .select()
       .from(sessions)
-      .where(and(eq(sessions.status, "ACTIVE"), eq(sessions.virtualCode, virtualCode)))
+      .where(
+        and(
+          eq(sessions.status, "ACTIVE"),
+          eq(sessions.virtualCode, virtualCode),
+        ),
+      )
       .limit(1)
       .then((res) => res[0]);
 
     if (!session) {
-      return NextResponse.json({ success: false, message: "Código virtual no válido o sesión expirada." }, { status: 400 });
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Código virtual no válido o sesión expirada.",
+        },
+        { status: 400 },
+      );
     }
 
     // 2. Verificar estudiante
     const student = await UniversityService.getStudentByCui(DniCui);
     if (!student) {
-      return NextResponse.json({ success: false, message: "Estudiante no encontrado." }, { status: 400 });
+      return NextResponse.json(
+        { success: false, message: "Estudiante no encontrado." },
+        { status: 400 },
+      );
     }
 
     // 3. Verificar si ya tiene marcación
     const existingAttendance = await db
       .select()
       .from(attendances)
-      .where(and(eq(attendances.studentCui, student.cui), eq(attendances.sessionId, session.id)))
+      .where(
+        and(
+          eq(attendances.studentCui, student.cui),
+          eq(attendances.sessionId, session.id),
+        ),
+      )
       .limit(1)
       .then((res) => res[0]);
 
     if (existingAttendance) {
-      return NextResponse.json({ success: true, message: "Asistencia ya registrada previamente para esta sesión." });
+      return NextResponse.json({
+        success: true,
+        message: "Asistencia ya registrada previamente para esta sesión.",
+      });
     }
 
     // 4. Evaluar asistencia (usando modo virtual)
@@ -58,60 +84,70 @@ export async function POST(request: NextRequest) {
     const classroomSchedules = await UniversityService.getClassroomSchedule();
     const courseGroups = [];
     for (const item of classroomSchedules) {
-        const g = await UniversityService.getGroupById(item.groupId);
-        if (g && activeGroup && g.courseId === activeGroup.courseId) {
-            courseGroups.push(g);
-        }
+      const g = await UniversityService.getGroupById(item.groupId);
+      if (g && activeGroup && g.courseId === activeGroup.courseId) {
+        courseGroups.push(g);
+      }
     }
 
-    const formattedSchedules = classroomSchedules.map(item => {
-        const year = now.getFullYear();
-        const month = now.getMonth();
-        const date = now.getDate();
-        const [startH, startM] = item.schedule.startTime.split(':').map(Number);
-        const [endH, endM] = item.schedule.endTime.split(':').map(Number);
-        return {
-            groupId: item.groupId,
-            startTime: new Date(year, month, date, startH, startM),
-            endTime: new Date(year, month, date, endH, endM),
-        };
+    const formattedSchedules = classroomSchedules.map((item) => {
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      const date = now.getDate();
+      const [startH, startM] = item.schedule.startTime.split(":").map(Number);
+      const [endH, endM] = item.schedule.endTime.split(":").map(Number);
+      return {
+        groupId: item.groupId,
+        startTime: new Date(year, month, date, startH, startM),
+        endTime: new Date(year, month, date, endH, endM),
+      };
     });
 
-    const result = AttendanceRulesEngine.evaluateStudentSwipe({
+    const result = AttendanceRulesEngine.evaluateStudentSwipe(
+      {
         currentTime: now,
         student,
         activeSession: {
-            ...session,
-            expectedStart: new Date(session.expectedStart),
-            expectedEnd: new Date(session.expectedEnd),
-            teacherCheckIn: session.teacherCheckIn ? new Date(session.teacherCheckIn) : null,
-            toleranceLimit: new Date(session.toleranceLimit || ""),
+          ...session,
+          expectedStart: new Date(session.expectedStart),
+          expectedEnd: new Date(session.expectedEnd),
+          teacherCheckIn: session.teacherCheckIn
+            ? new Date(session.teacherCheckIn)
+            : null,
+          toleranceLimit: new Date(session.toleranceLimit || ""),
         },
         currentCourseGroups: courseGroups,
         classroomSchedules: formattedSchedules,
-    }, true); // isVirtual = true
+      },
+      false,
+    );
 
     if (!result.valid) {
-        return NextResponse.json({ success: false, message: result.message }, { status: 400 });
+      return NextResponse.json(
+        { success: false, message: result.message },
+        { status: 400 },
+      );
     }
 
     // Registrar asistencia
     await db.insert(attendances).values({
-        id: crypto.randomUUID(),
-        studentCui: student.cui,
-        sessionId: session.id,
-        checkIn: now.toISOString(),
-        status: result.status,
-        checkOutType: "NORMAL",
-        observation: "Registro via Contingencia Virtual"
+      id: crypto.randomUUID(),
+      studentCui: student.cui,
+      sessionId: session.id,
+      checkIn: now.toISOString(),
+      status: result.status,
+      checkOutType: "NORMAL",
+      observation: "Registro via Contingencia Virtual",
     });
 
     return NextResponse.json({
-        success: true,
-        message: `Asistencia virtual registrada como ${result.status}. ${result.message}`
+      success: true,
+      message: `Asistencia virtual registrada como ${result.status}. ${result.message}`,
     });
-
-  } catch (error) {
-    return NextResponse.json({ success: false, message: "Error interno" }, { status: 500 });
+  } catch (_error) {
+    return NextResponse.json(
+      { success: false, message: "Error interno" },
+      { status: 500 },
+    );
   }
 }
