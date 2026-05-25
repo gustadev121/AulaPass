@@ -4,7 +4,7 @@
 
 **AulaPass** es un sistema de control de acceso y registro de asistencia diseñado específicamente para la realidad operativa de las aulas de la Universidad Nacional de San Agustín (UNSA). El sistema se ejecuta en un dispositivo físico (computadora o tablet) ubicado en la entrada de cada salón de clases, funcionando bajo un concepto de "Tótem de Autoservicio" complementado con un panel de administración para el docente.
 
-A diferencia de los sistemas de asistencia rígidos tradicionales, **AulaPass** equilibra el control estricto de puntualidad con la flexibilidad de los acuerdos cotidianos entre alumnos y profesores de la UNSA (como la asistencia intergrupal, los cambios de horario improvisados y el uso de las aulas como ambientes de estudio durante las horas hueco). El sistema está diseñado para capturar la identidad mediante el Código Único de Identidad (CUI) o el Documento Nacional de Identidad (DNI), procesar de manera inteligente la hora del registro respecto al horario oficial (obtenido mediante la integración mockeada con el sistema de la universidad) y las acciones del docente, y notificar visualmente el resultado de forma instantánea.
+A diferencia de los sistemas de asistencia rígidos tradicionales, **AulaPass** equilibra el control estricto de puntualidad con la flexibilidad de los acuerdos cotidianos entre alumnos y profesores de la UNSA (como la asistencia intergrupal, los cambios de horario improvisados y el uso de las aulas como ambientes de estudio durante las horas hueco). El sistema está diseñado para capturar la identidad mediante el Código Único de Identidad (CUI), procesar de manera inteligente la hora del registro respecto al horario oficial (obtenido mediante la integración mockeada con el sistema de la universidad) y las acciones del docente, y notificar visualmente el resultado de forma instantánea.
 
 ---
 
@@ -31,37 +31,31 @@ A continuación, se presentan las tablas de requerimientos funcionales del siste
 
 | ID | Nombre | Descripción |
 | :--- | :--- | :--- |
-| **RF-06** | Registro de Ingreso del Docente | El sistema debe identificar el ingreso del identificador numérico del profesor a cargo (verificado contra el sistema simulado de la universidad). Su marcación registrará su asistencia laboral del día y habilitará formalmente el inicio oficial del dictado en el aula para esa sesión. |
-| **RF-07** | Activación de Tolerancia Dinámica | El docente podrá configurar en el panel de control si la tolerancia de llegada de los alumnos inicia de forma **Estática** (desde la hora oficial calendarizada de la clase) o de forma **Dinámica** (los minutos de tolerancia comienzan a contar únicamente a partir del momento exacto en que el docente registra su propio ingreso al salón). |
-| **RF-08** | Declaración de Inasistencia Docente | Si transcurre un tiempo configurable posterior a la hora de inicio oficial de la clase sin que el docente haya registrado su ingreso, el sistema cerrará la sesión asignando automáticamente el estado de "Clase Suspendida / Inasistencia Docente", y etiquetará las marcaciones de los alumnos de ese bloque con esta misma observación. |
+| **RF-06** | Registro de Ingreso del Docente | El sistema debe identificar el ingreso del identificador numérico del profesor a cargo (verificado contra el sistema simulado de la universidad). Su marcación registrará su asistencia laboral del día y habilitará formalmente el inicio oficial del dictado en el aula para esa sesión. El docente puede marcar hasta 30 minutos antes del inicio programado. |
+| **RF-07** | Activación de Tolerancia Dinámica | El docente podrá configurar en el panel de control si la tolerancia de llegada de los alumnos inicia de forma **Estática** (desde la hora oficial calendarizada de la clase) o de forma **Dinámica** (los minutos de tolerancia comienzan a contar únicamente a partir del momento exacto en que el docente registra su propio ingreso al salón). Por defecto, la tolerancia es de 15 minutos. |
+| **RF-08** | Declaración de Inasistencia Docente | Si transcurren 20 minutos (valor por defecto configurable) posteriores a la hora de inicio oficial de la clase sin que el docente haya registrado su ingreso, el sistema cerrará la sesión asignando automáticamente el estado de "Clase Suspendida / Inasistencia Docente", y etiquetará las marcaciones de los alumnos de ese bloque como "Falta" con esta observación. |
 
 ### Módulo 4: Flujos de Permanencia, Salida y Horas Hueco
 
 | ID | Nombre | Descripción |
 | :--- | :--- | :--- |
 | **RF-09** | Alternancia de Flujo de Entrada y Salida | El sistema debe determinar el tipo de registro del alumno según su historial del día: si el identificador ingresado no posee registros previos en la sesión del día, registrará una **Entrada**; si el alumno ya cuenta con un registro de entrada previo para esa sesión, el sistema registrará una **Salida**. |
-| **RF-10** | Clasificación de Puntualidad | El sistema debe evaluar la hora de ingreso del alumno respecto al horario oficial y la tolerancia activa para categorizar la asistencia en tres estados: **Puntual** (ingreso a tiempo), **Tardanza** (retraso dentro del límite de tolerancia) o **Falta** (ingreso posterior al límite establecido). |
-| **RF-11** | Registro de Uso del Aula en Hora Hueco | Si un estudiante ingresa su identificador durante un periodo en el que no hay clases oficiales programadas en el aula (según la programación horaria obtenida del sistema simulado de la universidad), o si pertenece a la clase del siguiente turno académico y llega con excesiva anticipación, el sistema registrará su marca bajo el estado neutral de **Ambiente de Estudio**, permitiendo su permanencia temporal sin afectar sus récords académicos formales. |
+| **RF-10** | Clasificación de Puntualidad | El sistema evalúa la hora de ingreso del alumno respecto al límite de tolerancia (Estática o Dinámica) para categorizar la asistencia en dos estados de entrada: **Puntual** (ingreso dentro del límite de tolerancia) o **Tardanza** (ingreso posterior al límite establecido). El estado **Falta** se reserva para alumnos que no asistieron o cuya clase fue suspendida. |
+| **RF-11** | Registro de Uso del Aula en Hora Hueco | Si un estudiante ingresa su identificador durante un periodo en el que no hay clases oficiales programadas en el aula, el sistema registrará su marca bajo el estado neutral de **Ambiente de Estudio** (Hora Hueco). Si no hay una sesión de Hora Hueco activa, se creará una automáticamente con una duración predeterminada de 2 horas. |
 
-### Módulo 5: Contingencia de Sesiones Virtuales
-
-| ID | Nombre | Descripción |
-| :--- | :--- | :--- |
-| **RF-12** | Modo de Asistencia Virtual Contingente | Ante situaciones excepcionales (como suspensión de clases presenciales por protestas o mantenimiento), el docente podrá activar de forma remota o local el modo virtual para la sesión. Esto habilitará un canal de acceso alternativo para que los alumnos registren su asistencia mediante dispositivos móviles individuales utilizando un código temporal de validación de sesión. O en su defecto, el docente podrá llenar personalmente el registro de asistencia. |
-
-### Módulo 6: Resiliencia ante Errores Humanos y Modificaciones Manuales
+### Módulo 5: Resiliencia ante Errores Humanos y Modificaciones Manuales
 
 | ID | Nombre | Descripción |
 | :--- | :--- | :--- |
-| **RF-13** | Cierre Automático por Olvido de Marcación de Salida | El sistema debe mitigar el olvido de los estudiantes que no marcan su salida al retirarse del salón. Al concluir oficialmente el bloque horario asignado a la clase activa, el sistema cerrará de forma automática el registro de todos los alumnos que quedaron con estado "dentro del aula", asignándoles una salida forzada correspondiente al último minuto del bloque académico oficial con la etiqueta "Salida por Cierre de Sesión". |
-| **RF-14** | Corrección y Modificación Manual de Asistencia | El docente tendrá la potestad exclusiva, desde el panel de control del aula, de modificar, añadir o anular cualquier estado de asistencia registrado automáticamente por el tótem (por ejemplo, cambiar una "Falta" por "Tardanza/Puntual" debido a justificaciones excepcionales de fuerza mayor de un estudiante). Toda modificación manual quedará registrada en un historial interno para auditoría. |
+| **RF-12** | Cierre Automático por Olvido de Marcación de Salida | El sistema debe mitigar el olvido de los estudiantes que no marcan su salida al retirarse del salón. Al concluir oficialmente el bloque horario asignado a la clase activa, el sistema cerrará de forma automática el registro de todos los alumnos que quedaron con estado "dentro del aula", asignándoles una salida forzada correspondiente al último minuto del bloque académico oficial con la etiqueta "Salida por Cierre de Sesión". |
+| **RF-13** | Corrección y Modificación Manual de Asistencia | El docente tendrá la potestad exclusiva, desde el panel de control del aula, de modificar, añadir o anular cualquier estado de asistencia registrado automáticamente por el tótem (por ejemplo, cambiar una "Falta" por "Tardanza/Puntual" debido a justificaciones excepcionales de fuerza mayor de un estudiante). Toda modificación manual quedará registrada en un historial interno para auditoría. |
 
-### Módulo 7: Respuesta Visual en Pantalla
+### Módulo 6: Respuesta Visual en Pantalla
 
 | ID | Nombre | Descripción |
 | :--- | :--- | :--- |
-| **RF-15** | Notificación de Estado por Código de Colores | Tras registrar un identificador, el sistema debe cambiar temporalmente el color de la pantalla completa para dar una respuesta inmediata: <br>- **Verde:** Registro exitoso en estado **Puntual**.<br>- **Ámbar:** Registro exitoso en estado **Tardanza**.<br>- **Azul:** Registro exitoso de **Salida** o **Ambiente de Estudio**.<br>- **Rojo:** Registro en estado **Falta**, alumno no matriculado o error de entrada. |
-| **RF-16** | Temporizador de Restablecimiento de Pantalla | La pantalla de respuesta por colores debe mantenerse fija por un lapso continuo de 3 segundos para que sea legible. Pasado este tiempo, el sistema borrará automáticamente la información del usuario anterior y dejará la pantalla de espera lista para la siguiente marcación. |
+| **RF-14** | Notificación de Estado por Código de Colores | Tras registrar un identificador, el sistema debe cambiar temporalmente el color de la pantalla completa para dar una respuesta inmediata: <br>- **Verde:** Registro exitoso en estado **Puntual**.<br>- **Ámbar:** Registro exitoso en estado **Tardanza**.<br>- **Azul:** Registro exitoso de **Salida** o **Ambiente de Estudio**.<br>- **Rojo:** Registro en estado **Falta**, alumno no matriculado o error de entrada. |
+| **RF-15** | Temporizador de Restablecimiento de Pantalla | La pantalla de respuesta por colores debe mantenerse fija por un lapso continuo de 3 segundos para que sea legible. Pasado este tiempo, el sistema borrará automáticamente la información del usuario anterior y dejará la pantalla de espera lista para la siguiente marcación. |
 
 ---
 

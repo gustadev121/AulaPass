@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull, ne } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
@@ -8,35 +8,16 @@ import {
   type ExternalGroup,
   UniversityService,
 } from "@/lib/university-service";
+import { identifierSchema } from "@/lib/validations";
 
 // Esquema de validación del CUI/DNI (RF-01, RF-03)
 const swipeSchema = z.object({
-  DniCui: z
-    .string()
-    .transform((val) => val.trim())
-    .refine((val) => /^\d{8}$/.test(val), {
-      message: "El CUI/DNI debe contener exactamente 8 dígitos numéricos.",
-    }),
+  DniCui: identifierSchema,
   mockTime: z.string().optional(), // Inyección de tiempo para simulación/pruebas
 });
 
-function getDatesForSchedule(
-  currentTime: Date,
-  startTimeStr: string,
-  endTimeStr: string,
-) {
-  const year = currentTime.getFullYear();
-  const month = currentTime.getMonth();
-  const date = currentTime.getDate();
-
-  const [startH, startM] = startTimeStr.split(":").map(Number);
-  const [endH, endM] = endTimeStr.split(":").map(Number);
-
-  const expectedStart = new Date(year, month, date, startH, startM, 0, 0);
-  const expectedEnd = new Date(year, month, date, endH, endM, 0, 0);
-
-  return { expectedStart, expectedEnd };
-}
+const DUPLICATE_WINDOW_MS = 50;
+const recentStudentSwipes = new Map<string, number>();
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now(); // Para control de tiempo de respuesta (RNF-02)
@@ -63,7 +44,7 @@ export async function POST(request: NextRequest) {
 
     const dateString = now.toISOString().split("T")[0]; // YYYY-MM-DD
 
-    // 1. Verificar si es Docente (RF-06)
+    // 1. Verificar si es Docente (RF-06) usando CUI
     const teacher = await UniversityService.getTeacherByCui(DniCui);
     if (teacher) {
       // Buscar si el docente tiene una clase programada en el aula en este bloque
@@ -72,17 +53,17 @@ export async function POST(request: NextRequest) {
       let matchedSchedule = null;
 
       for (const item of classroomSchedules) {
-        const group = await UniversityService.getGroupById(item.groupId);
+        const group = item.group;
         if (
-          group &&
-          group.teacherCui === teacher.cui &&
+          group.teacherCode === teacher.code &&
           item.schedule.dayOfWeek === mappedDay
         ) {
-          const { expectedStart, expectedEnd } = getDatesForSchedule(
-            now,
-            item.schedule.startTime,
-            item.schedule.endTime,
-          );
+          const { expectedStart, expectedEnd } =
+            UniversityService.getDatesForSchedule(
+              now,
+              item.schedule.startTime,
+              item.schedule.endTime,
+            );
           const earliestStart = new Date(
             expectedStart.getTime() - 30 * 60 * 1000,
           );
@@ -121,12 +102,26 @@ export async function POST(request: NextRequest) {
         .then((res) => res[0]);
 
       if (session) {
+        if (session.status === "SUSPENDED") {
+          return NextResponse.json(
+            {
+              success: false,
+              color: "RED",
+              message:
+                "La sesión ha sido suspendida por inasistencia docente. No es posible registrar asistencia ahora.",
+            },
+            { status: 400 },
+          );
+        }
+
         if (session.teacherCheckIn) {
           return NextResponse.json({
             success: true,
             color: "BLUE",
             role: "TEACHER",
             name: teacher.name,
+            code: teacher.code,
+            cui: teacher.cui,
             message: `Bienvenido docente ${teacher.name}. Asistencia ya registrada previamente.`,
           });
         }
@@ -134,9 +129,20 @@ export async function POST(request: NextRequest) {
         // Actualizar sesión que fue iniciada de forma automática por un alumno (RF-05)
         const updatedTeacherCheckIn = now.toISOString();
         let toleranceLimit = session.toleranceLimit;
+        let toleranceType = session.toleranceType;
+
+        // [MEJORA] Si el docente llega tarde y la sesión era estática, cambiamos a dinámica
+        // para no perjudicar a los alumnos que vienen con él.
+        const expectedStart = new Date(session.expectedStart);
+        const isLateTeacher =
+          now.getTime() > expectedStart.getTime() + 15 * 60 * 1000;
+
+        if (isLateTeacher && toleranceType === "STATIC") {
+          toleranceType = "DYNAMIC";
+        }
 
         // Si es dinámica, re-calculamos el límite a partir de la llegada del docente (RF-07)
-        if (session.toleranceType === "DYNAMIC") {
+        if (toleranceType === "DYNAMIC") {
           // Asumimos 15 minutos por defecto si no está especificado
           toleranceLimit = new Date(
             now.getTime() + 15 * 60 * 1000,
@@ -147,19 +153,28 @@ export async function POST(request: NextRequest) {
           .update(sessions)
           .set({
             teacherCheckIn: updatedTeacherCheckIn,
+            toleranceType: toleranceType,
             toleranceLimit: toleranceLimit,
           })
           .where(eq(sessions.id, session.id));
       } else {
         // Crear nueva sesión iniciada por el docente
-        const { expectedStart, expectedEnd } = getDatesForSchedule(
-          now,
-          matchedSchedule.startTime,
-          matchedSchedule.endTime,
-        );
+        const { expectedStart, expectedEnd } =
+          UniversityService.getDatesForSchedule(
+            now,
+            matchedSchedule.startTime,
+            matchedSchedule.endTime,
+          );
         const toleranceMinutes = 15; // 15 min de tolerancia por defecto
-        const toleranceLimit = new Date(
-          expectedStart.getTime() + toleranceMinutes * 60 * 1000,
+
+        // [MEJORA] Si el docente llega tarde, iniciamos con tolerancia dinámica
+        const isLateTeacher =
+          now.getTime() >
+          expectedStart.getTime() + toleranceMinutes * 60 * 1000;
+        const tType = isLateTeacher ? "DYNAMIC" : "STATIC";
+        const tLimit = new Date(
+          (isLateTeacher ? now : expectedStart).getTime() +
+            toleranceMinutes * 60 * 1000,
         ).toISOString();
 
         await db.insert(sessions).values({
@@ -170,8 +185,8 @@ export async function POST(request: NextRequest) {
           expectedEnd: expectedEnd.toISOString(),
           teacherCheckIn: now.toISOString(),
           status: "ACTIVE",
-          toleranceType: "STATIC",
-          toleranceLimit: toleranceLimit,
+          toleranceType: tType,
+          toleranceLimit: tLimit,
         });
       }
 
@@ -180,20 +195,107 @@ export async function POST(request: NextRequest) {
         color: "BLUE",
         role: "TEACHER",
         name: teacher.name,
+        code: teacher.code,
+        cui: teacher.cui,
         message: `Asistencia del docente ${teacher.name} registrada con éxito. Clase iniciada.`,
       });
     }
-
     // 2. Verificar si es Estudiante (RF-04)
     const student = await UniversityService.getStudentByCui(DniCui);
     if (student) {
-      // Buscar si existe una sesión de clase activa en la base de datos local
-      const activeSession = await db
+      const lastSwipeAt = recentStudentSwipes.get(student.cui);
+      if (lastSwipeAt !== undefined) {
+        const deltaMs = now.getTime() - lastSwipeAt;
+        if (deltaMs >= 0 && deltaMs <= DUPLICATE_WINDOW_MS) {
+          return NextResponse.json(
+            {
+              success: false,
+              color: "RED",
+              message:
+                "Marcación duplicada detectada. Espere unos segundos e intente nuevamente.",
+            },
+            { status: 429 },
+          );
+        }
+      }
+
+      recentStudentSwipes.set(student.cui, now.getTime());
+
+      // Buscar si existe una sesión de clase activa en la base de datos local (excluyendo Hora Hueco)
+      let activeSession: any = await db
         .select()
         .from(sessions)
-        .where(eq(sessions.status, "ACTIVE"))
+        .where(
+          and(eq(sessions.status, "ACTIVE"), ne(sessions.groupId, "HORA_HUECO")),
+        )
         .limit(1)
         .then((res) => res[0]);
+
+      if (
+        activeSession &&
+        now.getTime() > new Date(activeSession.expectedEnd).getTime()
+      ) {
+        // [RF-13] Cierre automático forzado en el siguiente swipe si la sesión expiró
+        await db
+          .update(sessions)
+          .set({ status: "CLOSED" })
+          .where(eq(sessions.id, activeSession.id));
+
+        const allAttendances = await db
+          .select()
+          .from(attendances)
+          .where(eq(attendances.sessionId, activeSession.id));
+
+        const openAttendances = allAttendances.filter(
+          (att) => att.checkOut === null,
+        );
+
+        const expectedEndTime = new Date(activeSession.expectedEnd);
+        const forcedAttendances = AttendanceRulesEngine.applyAutomaticCheckOuts(
+          openAttendances.map((att) => ({
+            id: att.id,
+            checkOut: att.checkOut,
+            checkOutType: att.checkOutType as any,
+            status: att.status as any,
+          })),
+          expectedEndTime,
+        );
+
+        for (const forced of forcedAttendances) {
+          if (forced.checkOut) {
+            await db
+              .update(attendances)
+              .set({
+                checkOut: forced.checkOut,
+                checkOutType: "FORCED_BY_SESSION_CLOSE",
+              })
+              .where(eq(attendances.id, forced.id));
+          }
+        }
+
+        // [RF-10] Marcado automático de inasistencias en el cierre automático
+        const enrolledStudents = await UniversityService.getStudentsByGroup(
+          activeSession.groupId,
+        );
+        const absentStudentCuis = AttendanceRulesEngine.applyAutomaticAbsences(
+          enrolledStudents,
+          allAttendances,
+        );
+
+        for (const cui of absentStudentCuis) {
+          await db.insert(attendances).values({
+            id: crypto.randomUUID(),
+            studentCui: cui,
+            sessionId: activeSession.id,
+            checkIn: activeSession.expectedStart,
+            checkOut: activeSession.expectedEnd,
+            status: "FALTA",
+            observation: "Inasistencia automática (Cierre Automático por Expiración)",
+          });
+        }
+
+        activeSession = undefined;
+      }
 
       if (activeSession) {
         // Obtener el grupo activo y todos los grupos del curso para tolerancia de grupo intergrupo (RF-04)
@@ -212,16 +314,12 @@ export async function POST(request: NextRequest) {
         }
 
         // Obtener todos los horarios y grupos programados para el curso
-        // En nuestro mock de UNSA, podemos simular recuperar los grupos del mismo curso
-        // Filtramos MOCK_GROUPS indirectamente de forma simulada buscando grupos con el mismo courseId
-        // Para lograrlo, consultamos todos los grupos del aula y verificamos cuáles comparten el mismo courseId
         const classroomSchedules =
           await UniversityService.getClassroomSchedule();
         const courseGroups = [];
         for (const item of classroomSchedules) {
-          const g = await UniversityService.getGroupById(item.groupId);
-          if (g && g.courseId === activeGroup.courseId) {
-            courseGroups.push(g);
+          if (item.group.courseId === activeGroup.courseId) {
+            courseGroups.push(item.group);
           }
         }
 
@@ -278,13 +376,14 @@ export async function POST(request: NextRequest) {
         // Es una Entrada, evaluar reglas de asistencia
         // Formatear los horarios para el motor de reglas
         const formattedSchedules = classroomSchedules.map((item) => {
-          const { expectedStart, expectedEnd } = getDatesForSchedule(
-            now,
-            item.schedule.startTime,
-            item.schedule.endTime,
-          );
+          const { expectedStart, expectedEnd } =
+            UniversityService.getDatesForSchedule(
+              now,
+              item.schedule.startTime,
+              item.schedule.endTime,
+            );
           return {
-            groupId: item.groupId,
+            groupId: item.group.id,
             startTime: expectedStart,
             endTime: expectedEnd,
           };
@@ -336,9 +435,9 @@ export async function POST(request: NextRequest) {
         });
 
         // Mapear estado al color visual (RF-15)
-        let color: "VERDE" | "AMBAR" | "ROJO" | "BLUE" = "VERDE";
-        if (result.status === "TARDANZA") color = "AMBAR";
-        else if (result.status === "FALTA") color = "ROJO";
+        let color: "GREEN" | "AMBER" | "RED" | "BLUE" = "GREEN";
+        if (result.status === "TARDANZA") color = "AMBER";
+        else if (result.status === "FALTA") color = "RED";
         else if (result.status === "AMBIENTE_ESTUDIO") color = "BLUE";
 
         return NextResponse.json({
@@ -359,39 +458,36 @@ export async function POST(request: NextRequest) {
 
       for (const item of classroomSchedules) {
         if (item.schedule.dayOfWeek === mappedDay) {
-          const { expectedStart, expectedEnd } = getDatesForSchedule(
-            now,
-            item.schedule.startTime,
-            item.schedule.endTime,
-          );
+          const { expectedStart, expectedEnd } =
+            UniversityService.getDatesForSchedule(
+              now,
+              item.schedule.startTime,
+              item.schedule.endTime,
+            );
           const earliestStart = new Date(
             expectedStart.getTime() - 30 * 60 * 1000,
           );
 
           if (now >= earliestStart && now <= expectedEnd) {
             // Verificar si el estudiante está matriculado en esta asignatura
-            const group = await UniversityService.getGroupById(item.groupId);
-            if (group) {
-              // Obtener todos los grupos de la misma asignatura
-              const courseGroups: ExternalGroup[] = [];
-              for (const scheduleItem of classroomSchedules) {
-                const g = await UniversityService.getGroupById(
-                  scheduleItem.groupId,
-                );
-                if (g && g.courseId === group.courseId) {
-                  courseGroups.push(g);
-                }
-              }
+            const group = item.group;
 
-              const isEnrolled = student.enrolledGroupIds.some((sgid) =>
-                courseGroups.some((cg) => cg.id === sgid),
-              );
-
-              if (isEnrolled) {
-                matchedSchedule = item.schedule;
-                matchedGroup = group;
-                break;
+            // Obtener todos los grupos de la misma asignatura
+            const courseGroups: ExternalGroup[] = [];
+            for (const scheduleItem of classroomSchedules) {
+              if (scheduleItem.group.courseId === group.courseId) {
+                courseGroups.push(scheduleItem.group);
               }
+            }
+
+            const isEnrolled = student.enrolledGroupIds.some((sgid) =>
+              courseGroups.some((cg) => cg.id === sgid),
+            );
+
+            if (isEnrolled) {
+              matchedSchedule = item.schedule;
+              matchedGroup = group;
+              break;
             }
           }
         }
@@ -399,11 +495,12 @@ export async function POST(request: NextRequest) {
 
       if (matchedSchedule && matchedGroup) {
         // [RF-05] Autogenerar sesión de emergencia
-        const { expectedStart, expectedEnd } = getDatesForSchedule(
-          now,
-          matchedSchedule.startTime,
-          matchedSchedule.endTime,
-        );
+        const { expectedStart, expectedEnd } =
+          UniversityService.getDatesForSchedule(
+            now,
+            matchedSchedule.startTime,
+            matchedSchedule.endTime,
+          );
         const toleranceMinutes = 15;
         const toleranceLimit = new Date(
           expectedStart.getTime() + toleranceMinutes * 60 * 1000,
@@ -434,7 +531,7 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json({
           success: true,
-          color: "VERDE",
+          color: "GREEN",
           role: "STUDENT",
           name: student.name,
           swipeType: "ENTRADA",
@@ -483,11 +580,10 @@ export async function POST(request: NextRequest) {
           status: "ACTIVE",
           toleranceType: "STATIC",
           toleranceLimit: now.toISOString(),
-          virtualCode: null,
         };
       }
 
-      // Verificar si ya tiene marcación en la sesión de hora hueco
+      // Verificar si ya tiene marcación activa (sin salida) en la sesión de hora hueco
       const existingHuecoAttendance = await db
         .select()
         .from(attendances)
@@ -495,6 +591,7 @@ export async function POST(request: NextRequest) {
           and(
             eq(attendances.studentCui, student.cui),
             eq(attendances.sessionId, huecoSession.id),
+            isNull(attendances.checkOut),
           ),
         )
         .limit(1)
@@ -549,6 +646,7 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   } catch (error) {
+    console.error(error);
     // RNF-01: Robustez ante fallos
     return NextResponse.json(
       {

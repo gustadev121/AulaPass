@@ -43,12 +43,13 @@ export class AttendanceRulesEngine {
     expectedStart: Date,
     teacherCheckIn: Date | null,
     toleranceType: "STATIC" | "DYNAMIC",
-    toleranceMinutes: number
+    toleranceMinutes: number,
   ): Date {
-    const baseTime = (toleranceType === "DYNAMIC" && teacherCheckIn) 
-      ? new Date(teacherCheckIn) 
-      : new Date(expectedStart);
-    
+    const baseTime =
+      toleranceType === "DYNAMIC" && teacherCheckIn
+        ? new Date(teacherCheckIn)
+        : new Date(expectedStart);
+
     return new Date(baseTime.getTime() + toleranceMinutes * 60000);
   }
 
@@ -62,11 +63,13 @@ export class AttendanceRulesEngine {
     expectedStart: Date,
     teacherCheckIn: Date | null,
     currentTime: Date,
-    maxTeacherDelayMinutes: number
+    maxTeacherDelayMinutes: number,
   ): boolean {
     if (teacherCheckIn) return false;
-    
-    const deadline = new Date(expectedStart.getTime() + maxTeacherDelayMinutes * 60000);
+
+    const deadline = new Date(
+      expectedStart.getTime() + maxTeacherDelayMinutes * 60000,
+    );
     return currentTime.getTime() > deadline.getTime();
   }
 
@@ -74,14 +77,19 @@ export class AttendanceRulesEngine {
    * Helper para calcular minutos restantes (útil para la API y UI).
    */
   static getMinutesRemaining(deadline: Date, currentTime: Date): number {
-    return Math.max(0, Math.ceil((deadline.getTime() - currentTime.getTime()) / 60000));
+    return Math.max(
+      0,
+      Math.ceil((deadline.getTime() - currentTime.getTime()) / 60000),
+    );
   }
 
   /**
    * Determina el tipo de marcación (ENTRADA o SALIDA) basándose en los registros previos de la sesión.
    * [RF-09] Alternancia de Flujo de Entrada y Salida
    */
-  static determineSwipeType(hasCheckedIn: boolean | undefined | null): SwipeType {
+  static determineSwipeType(
+    hasCheckedIn: boolean | undefined | null,
+  ): SwipeType {
     return hasCheckedIn ? "SALIDA" : "ENTRADA";
   }
 
@@ -95,17 +103,17 @@ export class AttendanceRulesEngine {
   ): AttendanceRuleResult {
     // Robustez: Validación de entradas básicas [RNF-01]
     if (
-      !input || 
-      !input.student || 
-      !input.currentTime || 
-      !input.currentCourseGroups || 
+      !input ||
+      !input.student ||
+      !input.currentTime ||
+      !input.currentCourseGroups ||
       !input.classroomSchedules
     ) {
       return {
         valid: false,
         swipeType: "ENTRADA",
         status: "FALTA",
-        message: "Error: Datos de entrada inválidos o incompletos."
+        message: "Error: Datos de entrada inválidos o incompletos.",
       };
     }
 
@@ -132,7 +140,7 @@ export class AttendanceRulesEngine {
     if (!activeSession) {
       // Verificar si hay alguna clase programada en el aula en este momento para cualquier grupo
       const scheduledNow = classroomSchedules.find(
-        (s) => currentTime >= s.startTime && currentTime <= s.endTime,
+        (s) => currentTime >= s.startTime && currentTime < s.endTime,
       );
 
       if (!scheduledNow) {
@@ -173,32 +181,23 @@ export class AttendanceRulesEngine {
     }
 
     // 4. Clasificación de Puntualidad [RF-10] y Tolerancia Dinámica/Estática [RF-07]
-    // PE Válida: Marcación antes del límite (PUNTUAL).
-    // PE Inválida: Marcación después del fin de clase (FALTA).
-    // AVL: currentTime === toleranceLimit (Límite superior de Puntualidad).
+    // PE Válida: Dentro del límite de tolerancia (PUNTUAL).
+    // PE Válida: Posterior al límite de tolerancia (TARDANZA).
     const toleranceLimit = new Date(activeSession.toleranceLimit);
-    const expectedEnd = new Date(activeSession.expectedEnd);
 
     if (currentTime.getTime() <= toleranceLimit.getTime()) {
       return {
         valid: true,
         swipeType: "ENTRADA",
         status: "PUNTUAL",
-        message: "Ingreso Puntual.",
-      };
-    } else if (currentTime.getTime() <= expectedEnd.getTime()) {
-      return {
-        valid: true,
-        swipeType: "ENTRADA",
-        status: "TARDANZA",
-        message: "Ingreso con Tardanza.",
+        message: "Ingreso Puntual (dentro de tolerancia).",
       };
     } else {
       return {
         valid: true,
         swipeType: "ENTRADA",
-        status: "FALTA",
-        message: "Ingreso Fuera de Hora (Falta).",
+        status: "TARDANZA",
+        message: "Ingreso con Tardanza (fuera de tolerancia).",
       };
     }
   }
@@ -220,5 +219,19 @@ export class AttendanceRulesEngine {
       }
       return att;
     });
+  }
+
+  /**
+   * Identifica a los alumnos matriculados que no registraron ninguna marcación.
+   * [RF-10] Estos alumnos serán marcados automáticamente como FALTA al cierre de sesión.
+   */
+  static applyAutomaticAbsences(
+    enrolledStudents: ExternalStudent[],
+    existingAttendances: { studentCui: string }[],
+  ): string[] {
+    const presentCuis = new Set(existingAttendances.map((a) => a.studentCui));
+    return enrolledStudents
+      .filter((s) => !presentCuis.has(s.cui))
+      .map((s) => s.cui);
   }
 }

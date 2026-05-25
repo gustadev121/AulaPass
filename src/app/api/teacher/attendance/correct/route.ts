@@ -3,30 +3,35 @@ import { type NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { attendances, auditLogs } from "@/db/schema";
 
+const VALID_STATUSES = [
+  "PUNTUAL",
+  "TARDANZA",
+  "FALTA",
+  "AMBIENTE_ESTUDIO",
+] as const;
+type AttendanceStatus = (typeof VALID_STATUSES)[number];
+type OperationType = "UPDATE" | "DELETE" | "CREATE";
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { studentCui, sessionId, newStatus, reason, actorCui } = body;
+    const { studentCui, sessionId, newStatus, reason, actorCode, operation } =
+      body as {
+        studentCui?: string;
+        sessionId?: string;
+        newStatus?: AttendanceStatus;
+        reason?: string;
+        actorCode?: string;
+        operation?: OperationType;
+      };
 
     // Validación básica de parámetros
-    if (!studentCui || !sessionId || !newStatus || !reason || !actorCui) {
+    if (!studentCui || !sessionId || !reason || !actorCode) {
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Parámetros incompletos. Se requiere: studentCui, sessionId, newStatus, reason, actorCui.",
-        },
-        { status: 400 },
-      );
-    }
-
-    if (
-      !["PUNTUAL", "TARDANZA", "FALTA", "AMBIENTE_ESTUDIO"].includes(newStatus)
-    ) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "El estado de asistencia especificado no es válido.",
+          error:
+            "Parámetros incompletos. Se requiere: studentCui, sessionId, reason, actorCode.",
         },
         { status: 400 },
       );
@@ -45,7 +50,43 @@ export async function POST(request: NextRequest) {
       .limit(1)
       .then((res) => res[0]);
 
-    if (existingAttendance) {
+    const effectiveOperation: OperationType =
+      operation ?? (existingAttendance ? "UPDATE" : "CREATE");
+
+    if (effectiveOperation !== "DELETE" && !newStatus) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Se requiere newStatus para la operación solicitada.",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (
+      effectiveOperation !== "DELETE" &&
+      !VALID_STATUSES.includes(newStatus as AttendanceStatus)
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "El estado de asistencia especificado no es válido.",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (effectiveOperation === "UPDATE") {
+      if (!existingAttendance) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "No existe una asistencia previa para actualizar.",
+          },
+          { status: 404 },
+        );
+      }
+
       const originalStatus = existingAttendance.status;
 
       // 1. Modificar el estado y añadir la justificación en observaciones (RF-14)
@@ -61,10 +102,10 @@ export async function POST(request: NextRequest) {
       await db.insert(auditLogs).values({
         id: crypto.randomUUID(),
         sessionId,
-        actorCui,
+        actorCode,
         studentCui,
         originalStatus,
-        newStatus,
+        newStatus: newStatus as AttendanceStatus,
         reason,
         timestamp: new Date().toISOString(),
       });
@@ -75,26 +116,69 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Si no existe, "añadir" asistencia manual (RF-14)
+    if (effectiveOperation === "DELETE") {
+      if (!existingAttendance) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "No existe una asistencia previa para anular.",
+          },
+          { status: 404 },
+        );
+      }
+
+      const originalStatus = existingAttendance.status;
+
+      await db
+        .delete(attendances)
+        .where(eq(attendances.id, existingAttendance.id));
+
+      await db.insert(auditLogs).values({
+        id: crypto.randomUUID(),
+        sessionId,
+        actorCode,
+        studentCui,
+        originalStatus,
+        newStatus: "ANULADO",
+        reason,
+        timestamp: new Date().toISOString(),
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: "Asistencia anulada y registrada en auditoría.",
+      });
+    }
+
+    if (existingAttendance) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "La asistencia ya existe. Use UPDATE para modificarla.",
+        },
+        { status: 409 },
+      );
+    }
+
+    // Crear asistencia manual (RF-14)
     const newAttendanceId = crypto.randomUUID();
     await db.insert(attendances).values({
       id: newAttendanceId,
       studentCui,
       sessionId,
       checkIn: new Date().toISOString(),
-      status: newStatus,
+      status: newStatus as AttendanceStatus,
       checkOutType: "NORMAL",
       observation: `Añadido manualmente por el docente: ${reason}`,
     });
 
-    // Registrar en historial de auditoría
     await db.insert(auditLogs).values({
       id: crypto.randomUUID(),
       sessionId,
-      actorCui,
+      actorCode,
       studentCui,
       originalStatus: "INEXISTENTE",
-      newStatus,
+      newStatus: newStatus as AttendanceStatus,
       reason,
       timestamp: new Date().toISOString(),
     });
@@ -104,6 +188,7 @@ export async function POST(request: NextRequest) {
       message: `Asistencia añadida manualmente como ${newStatus} y registrada en auditoría.`,
     });
   } catch (error) {
+    console.error("[Correct Route Error]:", error);
     return NextResponse.json(
       {
         success: false,

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { attendances, sessions } from "@/db/schema";
@@ -25,7 +25,9 @@ export async function POST(request: NextRequest) {
       targetSession = await db
         .select()
         .from(sessions)
-        .where(eq(sessions.status, "ACTIVE"))
+        .where(
+          and(eq(sessions.status, "ACTIVE"), ne(sessions.groupId, "HORA_HUECO")),
+        )
         .limit(1)
         .then((res) => res[0]);
     }
