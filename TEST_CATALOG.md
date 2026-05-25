@@ -111,3 +111,12 @@ Este documento contiene el catálogo exhaustivo y definitivo de casos de prueba 
 | TC-7.06 | Rendimiento de Procesamiento (1ms después del umbral) | RNF-02 | Tiempo total de respuesta de 151 milisegundos. | Supera el umbral. Ejecución del manejador de timeout/advertencia si aplica, o registro en logs. | AVL |
 | TC-5.08 | Marcación física detona cierre automático diferido | Sesión expirada y alumno marca. | El sistema cierra la sesión expirada, realiza auto-checkouts, y procesa la nueva marcación. | AVL/PE |
 
+## Módulo 9: Flexibilidad de Asistencia por Curso
+
+| ID Caso | Descripción | Requerimiento | Datos de Entrada / Estado | Resultado Esperado | Técnica |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| TC-9.01 | Eliminar falta previa al asistir a otra sesión del curso | RF-Flexible | Alumno con FALTA en Sesión 1. Asiste a Sesión 2 del mismo curso en la misma semana. | La falta de la Sesión 1 es eliminada automáticamente. | PE |
+| TC-9.02 | No marcar falta si ya asistió a otra sesión del curso | RF-Flexible | Alumno asistió a Sesión 1. No asiste a Sesión 2 en la misma semana. Cierre de Sesión 2. | El sistema no registra falta para la Sesión 2. | PE |
+| TC-9.03 | Mantener faltas si no asistió a ninguna sesión del curso | RF-Flexible | Alumno no asiste a ninguna sesión del curso en la semana. | Se registran faltas para todas las sesiones no asistidas. | PE |
+| TC-9.04 | Flexibilidad en sesión suspendida por docente | RF-Flexible | Sesión suspendida. Alumno ya asistió a otra sesión del curso esa semana. | El alumno no es marcado con FALTA por la sesión suspendida. | PE |
+

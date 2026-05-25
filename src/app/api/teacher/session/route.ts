@@ -177,7 +177,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { groupId, toleranceType, toleranceMinutes, date } =
+    const { groupId, toleranceType, toleranceMinutes, date, onlyUpdateConfig } =
       body;
 
     const now = date ? new Date(date) : new Date();
@@ -198,22 +198,28 @@ export async function POST(request: NextRequest) {
         });
     }
 
-    // Buscar si ya existe una sesión activa (excluyendo Hora Hueco)
+    // Buscar si ya existe una sesión activa para este grupo (excluyendo Hora Hueco)
     const activeSession = await db
       .select()
       .from(sessions)
       .where(
-        and(eq(sessions.status, "ACTIVE"), ne(sessions.groupId, "HORA_HUECO")),
+        and(
+          eq(sessions.status, "ACTIVE"),
+          eq(sessions.groupId, groupId),
+          ne(sessions.groupId, "HORA_HUECO"),
+        ),
       )
       .limit(1)
       .then((res) => res[0]);
-
 
     if (activeSession) {
       // Actualizar sesión activa existente
       // Re-calcular límite de tolerancia si cambia el tipo/minutos
       let toleranceLimit = activeSession.toleranceLimit;
-      const tMinutes = toleranceMinutes !== undefined ? toleranceMinutes : Number.parseInt(activeSession.toleranceMinutes);
+      const tMinutes =
+        toleranceMinutes !== undefined
+          ? toleranceMinutes
+          : Number.parseInt(activeSession.toleranceMinutes);
       const tType = toleranceType || activeSession.toleranceType;
 
       if (toleranceType || toleranceMinutes !== undefined) {
@@ -222,10 +228,7 @@ export async function POST(request: NextRequest) {
             new Date(activeSession.expectedStart).getTime() +
               tMinutes * 60 * 1000,
           ).toISOString();
-        } else if (
-          tType === "DYNAMIC" &&
-          activeSession.teacherCheckIn
-        ) {
+        } else if (tType === "DYNAMIC" && activeSession.teacherCheckIn) {
           toleranceLimit = new Date(
             new Date(activeSession.teacherCheckIn).getTime() +
               tMinutes * 60 * 1000,
@@ -252,6 +255,13 @@ export async function POST(request: NextRequest) {
         success: true,
         message: "Configuración de sesión actualizada con éxito.",
         session: updatedSession,
+      });
+    }
+
+    if (onlyUpdateConfig) {
+      return NextResponse.json({
+        success: true,
+        message: "Configuración predeterminada del grupo actualizada.",
       });
     }
 

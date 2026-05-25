@@ -1,4 +1,5 @@
-import { and, eq, isNull, ne } from "drizzle-orm";
+import { and, between, eq, inArray, isNull, ne } from "drizzle-orm";
+import { format, startOfWeek, endOfWeek } from "date-fns";
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
@@ -391,6 +392,9 @@ export async function POST(request: NextRequest) {
           checkOutType: "NORMAL",
         });
 
+        // Limpiar faltas previas de la semana para este curso (RF-Flexible)
+        await SessionService.cleanupPreviousAbsences(student.cui, activeSession.groupId, dateString, activeSession.id);
+
         // Mapear estado al color visual (RF-15)
         let color: "GREEN" | "AMBER" | "RED" | "BLUE" = "GREEN";
         if (result.status === "TARDANZA") color = "AMBER";
@@ -496,6 +500,9 @@ export async function POST(request: NextRequest) {
           status: "PUNTUAL", // Al autogenerar la sesión de emergencia, el primer alumno es PUNTUAL
           checkOutType: "NORMAL",
         });
+
+        // Limpiar faltas previas de la semana para este curso (RF-Flexible)
+        await SessionService.cleanupPreviousAbsences(student.cui, matchedGroup.id, dateString, newSessionId);
 
         return NextResponse.json({
           success: true,

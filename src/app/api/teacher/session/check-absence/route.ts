@@ -90,14 +90,26 @@ export async function POST(request: NextRequest) {
 
         let updatedCount = 0;
         for (const att of studentAttendances) {
-          await db
-            .update(attendances)
-            .set({
-              observation: "Clase Suspendida / Inasistencia Docente",
-              status: "FALTA", // Pasa a falta formal al suspenderse la clase
-            })
-            .where(eq(attendances.id, att.id));
-          updatedCount++;
+          const hasAttendedAny = await SessionService.hasStudentAttendedCourseInWeek(
+            att.studentCui,
+            targetSession.groupId,
+            targetSession.date,
+            targetSession.id,
+          );
+
+          if (hasAttendedAny) {
+            // Si ya asistió a otra sesión, eliminamos este registro para que no aparezca como falta (RF-Flexible)
+            await db.delete(attendances).where(eq(attendances.id, att.id));
+          } else {
+            await db
+              .update(attendances)
+              .set({
+                observation: "Clase Suspendida / Inasistencia Docente",
+                status: "FALTA", // Pasa a falta formal al suspenderse la clase
+              })
+              .where(eq(attendances.id, att.id));
+            updatedCount++;
+          }
         }
 
         return NextResponse.json({

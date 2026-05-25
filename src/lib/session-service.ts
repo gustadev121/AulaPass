@@ -1,10 +1,96 @@
-import { and, eq, ne } from "drizzle-orm";
+import { and, between, eq, inArray, ne } from "drizzle-orm";
+import { format, startOfWeek, endOfWeek } from "date-fns";
 import { db } from "@/db";
 import { attendances, sessions } from "@/db/schema";
 import { AttendanceRulesEngine } from "@/lib/attendance-rules";
 import { UniversityService } from "@/lib/university-service";
 
 export class SessionService {
+  /**
+   * Obtiene todos los IDs de grupos que pertenecen al mismo curso que el grupo dado.
+   */
+  static async getCourseGroupIds(groupId: string): Promise<string[]> {
+    const activeGroup = await UniversityService.getGroupById(groupId);
+    if (!activeGroup) return [groupId];
+
+    const classroomSchedules = await UniversityService.getClassroomSchedule();
+    return Array.from(new Set(
+      classroomSchedules
+        .filter(item => item.group.courseId === activeGroup.courseId)
+        .map(item => item.group.id)
+    ));
+  }
+
+  /**
+   * Obtiene los IDs de todas las sesiones de una lista de grupos en una semana específica.
+   */
+  static async getWeekSessions(groupIds: string[], dateString: string): Promise<string[]> {
+    if (groupIds.length === 0) return [];
+    
+    const sessionDate = new Date(dateString + "T12:00:00Z");
+    const weekStart = format(startOfWeek(sessionDate, { weekStartsOn: 1 }), "yyyy-MM-dd");
+    const weekEnd = format(endOfWeek(sessionDate, { weekStartsOn: 1 }), "yyyy-MM-dd");
+
+    const weekSessions = await db
+      .select({ id: sessions.id })
+      .from(sessions)
+      .where(and(
+        inArray(sessions.groupId, groupIds),
+        between(sessions.date, weekStart, weekEnd)
+      ));
+    
+    return weekSessions.map(s => s.id);
+  }
+
+  /**
+   * Verifica si un alumno ha asistido a alguna sesión del curso en la misma semana (excluyendo una sesión específica).
+   */
+  static async hasStudentAttendedCourseInWeek(studentCui: string, groupId: string, dateString: string, excludeSessionId?: string): Promise<boolean> {
+    const courseGroupIds = await this.getCourseGroupIds(groupId);
+    let weekSessionIds = await this.getWeekSessions(courseGroupIds, dateString);
+
+    if (excludeSessionId) {
+      weekSessionIds = weekSessionIds.filter(id => id !== excludeSessionId);
+    }
+
+    if (weekSessionIds.length === 0) return false;
+
+    const attended = await db
+      .select()
+      .from(attendances)
+      .where(and(
+        eq(attendances.studentCui, studentCui),
+        inArray(attendances.sessionId, weekSessionIds),
+        inArray(attendances.status, ["PUNTUAL", "TARDANZA"])
+      ))
+      .limit(1)
+      .then(res => res.length > 0);
+
+    return attended;
+  }
+
+  /**
+   * Elimina las faltas automáticas previas de la misma semana para un curso dado.
+   */
+  static async cleanupPreviousAbsences(studentCui: string, groupId: string, dateString: string, excludeSessionId?: string) {
+    const courseGroupIds = await this.getCourseGroupIds(groupId);
+    let weekSessionIds = await this.getWeekSessions(courseGroupIds, dateString);
+
+    if (excludeSessionId) {
+      weekSessionIds = weekSessionIds.filter(id => id !== excludeSessionId);
+    }
+
+    if (weekSessionIds.length > 0) {
+      await db
+        .delete(attendances)
+        .where(and(
+          eq(attendances.studentCui, studentCui),
+          inArray(attendances.sessionId, weekSessionIds),
+          eq(attendances.status, "FALTA")
+        ));
+    }
+  }
+
   /**
    * Cierra formalmente una sesión, aplicando salidas forzadas e inasistencias automáticas.
    * Centraliza RF-10 y RF-13.
@@ -75,16 +161,21 @@ export class SessionService {
       );
 
       for (const cui of absentStudentCuis) {
-        await db.insert(attendances).values({
-          id: crypto.randomUUID(),
-          studentCui: cui,
-          sessionId: session.id,
-          checkIn: session.expectedStart,
-          checkOut: session.expectedEnd,
-          status: "FALTA",
-          observation: `Inasistencia automática (${closingReason})`,
-        });
-        absentCount++;
+        // Flexibilidad de Curso: No marcar falta si asistió a otra sesión del curso en la misma semana
+        const hasAttendedAny = await this.hasStudentAttendedCourseInWeek(cui, session.groupId, session.date, session.id);
+
+        if (!hasAttendedAny) {
+          await db.insert(attendances).values({
+            id: crypto.randomUUID(),
+            studentCui: cui,
+            sessionId: session.id,
+            checkIn: session.expectedStart,
+            checkOut: session.expectedEnd,
+            status: "FALTA",
+            observation: `Inasistencia automática (${closingReason})`,
+          });
+          absentCount++;
+        }
       }
     }
 

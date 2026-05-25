@@ -494,16 +494,19 @@ describe("API Integration Tests - Módulos 1, 2, 3, 4, 6, 8", () => {
             .from(sessions)
             .where(eq(sessions.id, sessionId));
           expect(oldSession[0].status).toBe("CLOSED");
-// Verificar que hubo auto-checkout para Juan y faltas para Carlos y Ana
-const oldAtt = await db
-  .select()
-  .from(attendances)
-  .where(eq(attendances.sessionId, sessionId));
-expect(oldAtt.length).toBe(3);
-expect(oldAtt.find((a) => a.studentCui === "20201234")?.checkOutType).toBe(
-  "FORCED_BY_SESSION_CLOSE",
-);
-expect(oldAtt.filter((a) => a.status === "FALTA").length).toBe(2);
+
+          // Verificar que hubo auto-checkout para Juan y falta para Carlos (RF-10, RF-13)
+          // Ana Choque (20210002) NO debe tener falta porque está asistiendo a esta otra sesión (RF-Flexible)
+          const oldAtt = await db
+            .select()
+            .from(attendances)
+            .where(eq(attendances.sessionId, sessionId));
+          
+          expect(oldAtt.length).toBe(2); // Juan + Carlos
+          expect(oldAtt.find((a) => a.studentCui === "20201234")?.checkOutType).toBe(
+            "FORCED_BY_SESSION_CLOSE",
+          );
+          expect(oldAtt.filter((a) => a.status === "FALTA").length).toBe(1); // Solo Carlos
 
 
           // Verificar que se creó una sesión nueva para SW-II-B

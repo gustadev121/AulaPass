@@ -129,18 +129,23 @@ export default function TeacherPanel({
           groupId: selectedSession ? selectedSession.groupId : group?.id,
           toleranceType: toleranceMode,
           toleranceMinutes: toleranceMinutes,
+          onlyUpdateConfig: selectedSession !== null && !isCurrentSessionActive,
         }),
       });
       const data = await response.json();
       if (data.success) {
         setMessage(
-          selectedSession
-            ? "Configuración actualizada."
-            : "Sesión iniciada manualmente.",
+          isCurrentSessionActive
+            ? "Configuración de sesión actualizada."
+            : selectedSession
+              ? "Configuración predeterminada actualizada."
+              : "Sesión iniciada manualmente.",
         );
-        setSelectedSession(data.session);
-        if (data.session.toleranceType) {
-          setToleranceMode(data.session.toleranceType);
+        if (data.session) {
+          setSelectedSession(data.session);
+          if (data.session.toleranceType) {
+            setToleranceMode(data.session.toleranceType);
+          }
         }
       } else {
         setMessage(data.message || "Error al procesar solicitud.");
@@ -379,7 +384,6 @@ export default function TeacherPanel({
               <select
                 id="tolerance-mode"
                 value={toleranceMode}
-                disabled={!isCurrentSessionActive}
                 onChange={(e) =>
                   setToleranceMode(e.target.value as "STATIC" | "DYNAMIC")
                 }
@@ -400,7 +404,6 @@ export default function TeacherPanel({
                 id="tolerance-minutes"
                 type="number"
                 value={toleranceMinutes}
-                disabled={!isCurrentSessionActive}
                 onChange={(e) =>
                   setToleranceMinutes(Number.parseInt(e.target.value, 10))
                 }
@@ -412,14 +415,13 @@ export default function TeacherPanel({
             <button
               type="button"
               onClick={handleUpdateConfig}
-              disabled={!isCurrentSessionActive && selectedSession !== null}
-              className={`w-full py-2 rounded-lg transition ${
-                isCurrentSessionActive || selectedSession === null
-                  ? "bg-blue-600 text-white hover:bg-blue-700"
-                  : "bg-gray-200 text-gray-400 cursor-not-allowed"
-              }`}
+              className="w-full py-2 rounded-lg transition bg-blue-600 text-white hover:bg-blue-700"
             >
-              {selectedSession ? "Aplicar Ajustes" : "Iniciar Sesión Manual"}
+              {isCurrentSessionActive
+                ? "Aplicar a Sesión"
+                : selectedSession
+                  ? "Actualizar Grupo"
+                  : "Iniciar Sesión Manual"}
             </button>
           </div>
         </div>
