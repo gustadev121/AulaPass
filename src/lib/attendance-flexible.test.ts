@@ -2,13 +2,15 @@ import { and, eq } from "drizzle-orm";
 import { testApiHandler } from "next-test-api-route-handler";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db";
-import { attendances, sessions } from "@/db/schema";
-import * as swipeRoute from "../app/api/kiosk/swipe/route";
+import { attendances, auditLogs, groupConfigs, sessions } from "@/db/schema";
 import { SessionService } from "@/lib/session-service";
+import * as swipeRoute from "../app/api/kiosk/swipe/route";
 
 describe("Flexibilidad de Asistencia por Curso (RF-Flexible)", () => {
   beforeEach(async () => {
+    await db.delete(auditLogs);
     await db.delete(attendances);
+    await db.delete(groupConfigs);
     await db.delete(sessions);
   });
 
@@ -17,7 +19,7 @@ describe("Flexibilidad de Asistencia por Curso (RF-Flexible)", () => {
     const session1Id = "session-lunes";
     await db.insert(sessions).values({
       id: session1Id,
-      groupId: "SW-II-A", 
+      groupId: "SW-II-A",
       date: "2026-05-25",
       expectedStart: "2026-05-25T07:00:00.000Z",
       expectedEnd: "2026-05-25T08:40:00.000Z",
@@ -44,10 +46,15 @@ describe("Flexibilidad de Asistencia por Curso (RF-Flexible)", () => {
     const faltaLunes = await db
       .select()
       .from(attendances)
-      .where(and(eq(attendances.studentCui, "20201234"), eq(attendances.sessionId, session1Id)))
+      .where(
+        and(
+          eq(attendances.studentCui, "20201234"),
+          eq(attendances.sessionId, session1Id),
+        ),
+      )
       .limit(1)
-      .then(res => res[0]);
-    
+      .then((res) => res[0]);
+
     expect(faltaLunes).toBeDefined();
     expect(faltaLunes.status).toBe("FALTA");
 
@@ -69,9 +76,14 @@ describe("Flexibilidad de Asistencia por Curso (RF-Flexible)", () => {
     const faltaLunesDespues = await db
       .select()
       .from(attendances)
-      .where(and(eq(attendances.studentCui, "20201234"), eq(attendances.sessionId, session1Id)))
+      .where(
+        and(
+          eq(attendances.studentCui, "20201234"),
+          eq(attendances.sessionId, session1Id),
+        ),
+      )
       .limit(1)
-      .then(res => res[0]);
+      .then((res) => res[0]);
 
     expect(faltaLunesDespues).toBeUndefined();
   });
@@ -123,9 +135,14 @@ describe("Flexibilidad de Asistencia por Curso (RF-Flexible)", () => {
     const faltaMiercoles = await db
       .select()
       .from(attendances)
-      .where(and(eq(attendances.studentCui, "20201234"), eq(attendances.sessionId, session2Id)))
+      .where(
+        and(
+          eq(attendances.studentCui, "20201234"),
+          eq(attendances.sessionId, session2Id),
+        ),
+      )
       .limit(1)
-      .then(res => res[0]);
+      .then((res) => res[0]);
 
     expect(faltaMiercoles).toBeUndefined();
   });
@@ -167,7 +184,12 @@ describe("Flexibilidad de Asistencia por Curso (RF-Flexible)", () => {
     const faltas = await db
       .select()
       .from(attendances)
-      .where(and(eq(attendances.studentCui, "20201234"), eq(attendances.status, "FALTA")));
+      .where(
+        and(
+          eq(attendances.studentCui, "20201234"),
+          eq(attendances.status, "FALTA"),
+        ),
+      );
 
     expect(faltas.length).toBe(2);
   });
@@ -219,9 +241,14 @@ describe("Flexibilidad de Asistencia por Curso (RF-Flexible)", () => {
     const faltaSuspendida = await db
       .select()
       .from(attendances)
-      .where(and(eq(attendances.studentCui, "20201234"), eq(attendances.sessionId, session2Id)))
+      .where(
+        and(
+          eq(attendances.studentCui, "20201234"),
+          eq(attendances.sessionId, session2Id),
+        ),
+      )
       .limit(1)
-      .then(res => res[0]);
+      .then((res) => res[0]);
 
     expect(faltaSuspendida).toBeUndefined();
   });

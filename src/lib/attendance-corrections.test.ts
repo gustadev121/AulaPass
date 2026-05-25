@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { testApiHandler } from "next-test-api-route-handler";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db";
-import { attendances, sessions, auditLogs } from "@/db/schema";
+import { attendances, auditLogs, sessions } from "@/db/schema";
 import * as correctRoute from "../app/api/teacher/attendance/correct/route";
 
 describe("Corrección Manual de Asistencia (RF-13)", () => {
@@ -63,10 +63,15 @@ describe("Corrección Manual de Asistencia (RF-13)", () => {
         const att = await db
           .select()
           .from(attendances)
-          .where(and(eq(attendances.studentCui, studentCui), eq(attendances.sessionId, sessionId)))
+          .where(
+            and(
+              eq(attendances.studentCui, studentCui),
+              eq(attendances.sessionId, sessionId),
+            ),
+          )
           .limit(1)
-          .then(res => res[0]);
-        
+          .then((res) => res[0]);
+
         expect(att.status).toBe("PUNTUAL");
         expect(att.observation).toContain("Justificación médica");
 
@@ -102,10 +107,15 @@ describe("Corrección Manual de Asistencia (RF-13)", () => {
         const att = await db
           .select()
           .from(attendances)
-          .where(and(eq(attendances.studentCui, studentCui), eq(attendances.sessionId, sessionId)))
+          .where(
+            and(
+              eq(attendances.studentCui, studentCui),
+              eq(attendances.sessionId, sessionId),
+            ),
+          )
           .limit(1)
-          .then(res => res[0]);
-        
+          .then((res) => res[0]);
+
         expect(att).toBeUndefined();
 
         // Verificar auditoría
@@ -147,10 +157,15 @@ describe("Corrección Manual de Asistencia (RF-13)", () => {
         const att = await db
           .select()
           .from(attendances)
-          .where(and(eq(attendances.studentCui, studentCui), eq(attendances.sessionId, sessionId)))
+          .where(
+            and(
+              eq(attendances.studentCui, studentCui),
+              eq(attendances.sessionId, sessionId),
+            ),
+          )
           .limit(1)
-          .then(res => res[0]);
-        
+          .then((res) => res[0]);
+
         expect(att).toBeDefined();
         expect(att.status).toBe("PUNTUAL");
       },

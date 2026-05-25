@@ -1,5 +1,4 @@
-import { and, between, eq, inArray, isNull, ne } from "drizzle-orm";
-import { format, startOfWeek, endOfWeek } from "date-fns";
+import { and, eq, isNull, ne } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
@@ -20,6 +19,19 @@ const swipeSchema = z.object({
 
 const DUPLICATE_WINDOW_MS = 50;
 const recentStudentSwipes = new Map<string, number>();
+
+interface Session {
+  id: string;
+  groupId: string;
+  date: string;
+  expectedStart: string;
+  expectedEnd: string;
+  teacherCheckIn: string | null;
+  status: "ACTIVE" | "CLOSED" | "SUSPENDED";
+  toleranceType: "STATIC" | "DYNAMIC";
+  toleranceMinutes: string;
+  toleranceLimit: string | null;
+}
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now(); // Para control de tiempo de respuesta (RNF-02)
@@ -132,13 +144,14 @@ export async function POST(request: NextRequest) {
         const updatedTeacherCheckIn = now.toISOString();
         let toleranceLimit = session.toleranceLimit;
         let toleranceType = session.toleranceType;
-        const toleranceMinutes = Number.parseInt(session.toleranceMinutes);
+        const toleranceMinutes = Number.parseInt(session.toleranceMinutes, 10);
 
         // [MEJORA] Si el docente llega tarde y la sesión era estática, cambiamos a dinámica
         // para no perjudicar a los alumnos que vienen con él.
         const expectedStart = new Date(session.expectedStart);
         const isLateTeacher =
-          now.getTime() > expectedStart.getTime() + toleranceMinutes * 60 * 1000;
+          now.getTime() >
+          expectedStart.getTime() + toleranceMinutes * 60 * 1000;
 
         if (isLateTeacher && toleranceType === "STATIC") {
           toleranceType = "DYNAMIC";
@@ -175,8 +188,12 @@ export async function POST(request: NextRequest) {
           .where(eq(groupConfigs.groupId, matchedGroup.id))
           .then((res) => res[0]);
 
-        const toleranceMinutes = groupConfig ? Number.parseInt(groupConfig.toleranceMinutes) : 15;
-        const baseToleranceType = groupConfig ? groupConfig.toleranceType : "STATIC";
+        const toleranceMinutes = groupConfig
+          ? Number.parseInt(groupConfig.toleranceMinutes, 10)
+          : 15;
+        const baseToleranceType = groupConfig
+          ? groupConfig.toleranceType
+          : "STATIC";
 
         // [MEJORA] Si el docente llega tarde, iniciamos con tolerancia dinámica
         const isLateTeacher =
@@ -234,14 +251,17 @@ export async function POST(request: NextRequest) {
       recentStudentSwipes.set(student.cui, now.getTime());
 
       // Buscar si existe una sesión de clase activa en la base de datos local (excluyendo Hora Hueco)
-      let activeSession: any = await db
+      let activeSession: Session | undefined = (await db
         .select()
         .from(sessions)
         .where(
-          and(eq(sessions.status, "ACTIVE"), ne(sessions.groupId, "HORA_HUECO")),
+          and(
+            eq(sessions.status, "ACTIVE"),
+            ne(sessions.groupId, "HORA_HUECO"),
+          ),
         )
         .limit(1)
-        .then((res) => res[0]);
+        .then((res) => res[0])) as Session | undefined;
 
       if (
         activeSession &&
@@ -393,7 +413,12 @@ export async function POST(request: NextRequest) {
         });
 
         // Limpiar faltas previas de la semana para este curso (RF-Flexible)
-        await SessionService.cleanupPreviousAbsences(student.cui, activeSession.groupId, dateString, activeSession.id);
+        await SessionService.cleanupPreviousAbsences(
+          student.cui,
+          activeSession.groupId,
+          dateString,
+          activeSession.id,
+        );
 
         // Mapear estado al color visual (RF-15)
         let color: "GREEN" | "AMBER" | "RED" | "BLUE" = "GREEN";
@@ -470,8 +495,12 @@ export async function POST(request: NextRequest) {
           .where(eq(groupConfigs.groupId, matchedGroup.id))
           .then((res) => res[0]);
 
-        const toleranceMinutes = groupConfig ? Number.parseInt(groupConfig.toleranceMinutes) : 15;
-        const toleranceType = groupConfig ? groupConfig.toleranceType : "STATIC";
+        const toleranceMinutes = groupConfig
+          ? Number.parseInt(groupConfig.toleranceMinutes, 10)
+          : 15;
+        const toleranceType = groupConfig
+          ? groupConfig.toleranceType
+          : "STATIC";
 
         const toleranceLimit = new Date(
           expectedStart.getTime() + toleranceMinutes * 60 * 1000,
@@ -502,7 +531,12 @@ export async function POST(request: NextRequest) {
         });
 
         // Limpiar faltas previas de la semana para este curso (RF-Flexible)
-        await SessionService.cleanupPreviousAbsences(student.cui, matchedGroup.id, dateString, newSessionId);
+        await SessionService.cleanupPreviousAbsences(
+          student.cui,
+          matchedGroup.id,
+          dateString,
+          newSessionId,
+        );
 
         return NextResponse.json({
           success: true,
@@ -517,7 +551,7 @@ export async function POST(request: NextRequest) {
 
       // [RF-11] Hora Hueco: No hay clases programadas en este momento
       // Crear o buscar sesión de Hora Hueco
-      let huecoSession = await db
+      let huecoSession: Session | undefined = (await db
         .select()
         .from(sessions)
         .where(
@@ -528,7 +562,7 @@ export async function POST(request: NextRequest) {
           ),
         )
         .limit(1)
-        .then((res) => res[0]);
+        .then((res) => res[0])) as Session | undefined;
 
       if (!huecoSession) {
         const huecoId = crypto.randomUUID();
@@ -542,6 +576,7 @@ export async function POST(request: NextRequest) {
           teacherCheckIn: null,
           status: "ACTIVE",
           toleranceType: "STATIC",
+          toleranceMinutes: "0",
           toleranceLimit: now.toISOString(),
         });
 
@@ -554,6 +589,7 @@ export async function POST(request: NextRequest) {
           teacherCheckIn: null,
           status: "ACTIVE",
           toleranceType: "STATIC",
+          toleranceMinutes: "0",
           toleranceLimit: now.toISOString(),
         };
       }

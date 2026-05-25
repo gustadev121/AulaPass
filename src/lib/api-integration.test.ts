@@ -3,12 +3,12 @@ import { testApiHandler } from "next-test-api-route-handler";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/db";
 import { attendances, auditLogs, sessions } from "@/db/schema";
+import { SessionService } from "@/lib/session-service";
 import { UniversityService } from "@/lib/university-service";
 import * as swipeRoute from "../app/api/kiosk/swipe/route";
 import * as correctAttendanceRoute from "../app/api/teacher/attendance/correct/route";
 import * as teacherLoginRoute from "../app/api/teacher/login/route";
 import * as checkAbsenceRoute from "../app/api/teacher/session/check-absence/route";
-import { SessionService } from "@/lib/session-service";
 
 describe("API Integration Tests - Módulos 1, 2, 3, 4, 6, 8", () => {
   beforeEach(async () => {
@@ -340,7 +340,7 @@ describe("API Integration Tests - Módulos 1, 2, 3, 4, 6, 8", () => {
     it("debe cerrar la sesión y marcar faltas automáticamente cuando el tiempo expira (TC-3.08)", async () => {
       const sessionId = crypto.randomUUID();
       const expectedEnd = "2026-05-25T08:40:00.000Z";
-      
+
       await db.insert(sessions).values({
         id: sessionId,
         groupId: "SW-II-A", // Grupo con 3 alumnos en mock (1, 2, 3)
@@ -382,16 +382,21 @@ describe("API Integration Tests - Módulos 1, 2, 3, 4, 6, 8", () => {
             .from(sessions)
             .where(eq(sessions.id, sessionId))
             .limit(1)
-            .then(r => r[0]);
+            .then((r) => r[0]);
           expect(sess.status).toBe("CLOSED");
 
           // Verificar que el alumno 1 tiene salida forzada (RF-13)
           const att1 = await db
             .select()
             .from(attendances)
-            .where(and(eq(attendances.sessionId, sessionId), eq(attendances.studentCui, "20201234")))
+            .where(
+              and(
+                eq(attendances.sessionId, sessionId),
+                eq(attendances.studentCui, "20201234"),
+              ),
+            )
             .limit(1)
-            .then(r => r[0]);
+            .then((r) => r[0]);
           expect(att1.checkOut).toBe(expectedEnd);
           expect(att1.checkOutType).toBe("FORCED_BY_SESSION_CLOSE");
 
@@ -399,9 +404,14 @@ describe("API Integration Tests - Módulos 1, 2, 3, 4, 6, 8", () => {
           const absences = await db
             .select()
             .from(attendances)
-            .where(and(eq(attendances.sessionId, sessionId), eq(attendances.status, "FALTA")));
-          
-          const absentCuis = absences.map(a => a.studentCui);
+            .where(
+              and(
+                eq(attendances.sessionId, sessionId),
+                eq(attendances.status, "FALTA"),
+              ),
+            );
+
+          const absentCuis = absences.map((a) => a.studentCui);
           expect(absentCuis).toContain("20210001");
           expect(absentCuis).toContain("20210002");
         },
@@ -501,13 +511,12 @@ describe("API Integration Tests - Módulos 1, 2, 3, 4, 6, 8", () => {
             .select()
             .from(attendances)
             .where(eq(attendances.sessionId, sessionId));
-          
-          expect(oldAtt.length).toBe(2); // Juan + Carlos
-          expect(oldAtt.find((a) => a.studentCui === "20201234")?.checkOutType).toBe(
-            "FORCED_BY_SESSION_CLOSE",
-          );
-          expect(oldAtt.filter((a) => a.status === "FALTA").length).toBe(1); // Solo Carlos
 
+          expect(oldAtt.length).toBe(2); // Juan + Carlos
+          expect(
+            oldAtt.find((a) => a.studentCui === "20201234")?.checkOutType,
+          ).toBe("FORCED_BY_SESSION_CLOSE");
+          expect(oldAtt.filter((a) => a.status === "FALTA").length).toBe(1); // Solo Carlos
 
           // Verificar que se creó una sesión nueva para SW-II-B
           const newSessions = await db
@@ -554,7 +563,10 @@ describe("API Integration Tests - Módulos 1, 2, 3, 4, 6, 8", () => {
         status: "PUNTUAL",
       });
 
-      const result = await SessionService.closeSession(sessionId, "Cierre de Sesión");
+      const result = await SessionService.closeSession(
+        sessionId,
+        "Cierre de Sesión",
+      );
 
       expect(result.success).toBe(true);
       expect(result.forcedCheckOutCount).toBe(1);
@@ -571,7 +583,7 @@ describe("API Integration Tests - Módulos 1, 2, 3, 4, 6, 8", () => {
         .from(attendances)
         .where(eq(attendances.status, "FALTA"));
       expect(faltas.length).toBe(2);
-          const cuis = faltas.map((f) => f.studentCui);
+      const cuis = faltas.map((f) => f.studentCui);
       expect(cuis).toContain("20210001");
       expect(cuis).toContain("20210002");
     });

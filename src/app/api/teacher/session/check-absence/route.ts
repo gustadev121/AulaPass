@@ -27,7 +27,10 @@ export async function POST(request: NextRequest) {
         .select()
         .from(sessions)
         .where(
-          and(eq(sessions.status, "ACTIVE"), ne(sessions.groupId, "HORA_HUECO")),
+          and(
+            eq(sessions.status, "ACTIVE"),
+            ne(sessions.groupId, "HORA_HUECO"),
+          ),
         )
         .limit(1)
         .then((res) => res[0]);
@@ -90,12 +93,13 @@ export async function POST(request: NextRequest) {
 
         let updatedCount = 0;
         for (const att of studentAttendances) {
-          const hasAttendedAny = await SessionService.hasStudentAttendedCourseInWeek(
-            att.studentCui,
-            targetSession.groupId,
-            targetSession.date,
-            targetSession.id,
-          );
+          const hasAttendedAny =
+            await SessionService.hasStudentAttendedCourseInWeek(
+              att.studentCui,
+              targetSession.groupId,
+              targetSession.date,
+              targetSession.id,
+            );
 
           if (hasAttendedAny) {
             // Si ya asistió a otra sesión, eliminamos este registro para que no aparezca como falta (RF-Flexible)

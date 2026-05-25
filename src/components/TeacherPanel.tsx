@@ -25,11 +25,6 @@ interface Session {
   toleranceLimit?: string | null;
 }
 
-interface GroupConfig {
-  toleranceType: "STATIC" | "DYNAMIC";
-  toleranceMinutes: string;
-}
-
 interface Group {
   id: string;
   courseId: string;
@@ -94,10 +89,14 @@ export default function TeacherPanel({
 
         if (data.session) {
           setToleranceMode(data.session.toleranceType);
-          setToleranceMinutes(Number.parseInt(data.session.toleranceMinutes));
+          setToleranceMinutes(
+            Number.parseInt(data.session.toleranceMinutes, 10),
+          );
         } else if (data.config) {
           setToleranceMode(data.config.toleranceType);
-          setToleranceMinutes(Number.parseInt(data.config.toleranceMinutes));
+          setToleranceMinutes(
+            Number.parseInt(data.config.toleranceMinutes, 10),
+          );
         }
       } catch (_error) {
         setMessage("Error al cargar datos del panel.");
@@ -408,217 +407,403 @@ export default function TeacherPanel({
             </p>
           </div>
         </div>
-
-        {/* Alta rápida de asistencia manual (RF-14) */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 col-span-1 md:col-span-3">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold text-gray-700">
-              Registro Manual de Asistencia (Excepción/Contingencia)
-            </h2>
-            {selectedSession && (
-              <span
-                className={`px-3 py-1 rounded-lg text-sm font-bold ${
-                  isCurrentSessionActive
-                    ? "bg-green-100 text-green-700"
-                    : "bg-amber-100 text-amber-700"
-                }`}
-                suppressHydrationWarning
-              >
-                {isCurrentSessionActive
-                  ? "Sesión Activa"
-                  : `Sesión: ${new Date(selectedSession.date).toLocaleDateString()} ${new Date(selectedSession.expectedStart).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
-              </span>
-            )}
-          </div>
-          <form
-            onSubmit={handleCreateAttendance}
-            className="grid grid-cols-1 md:grid-cols-4 gap-4"
-          >
-            <input
-              type="text"
-              value={newStudentCui}
-              onChange={(e) => setNewStudentCui(e.target.value)}
-              placeholder="CUI del Alumno (8 dígitos)"
-              className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
-              maxLength={8}
-              required
-            />
-            <select
-              value={newStatus}
-              onChange={(e) =>
-                setNewStatus(e.target.value as AttendanceRecord["status"])
-              }
-              className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="PUNTUAL">Presente (Puntual)</option>
-              <option value="TARDANZA">Tardanza</option>
-              <option value="FALTA">Falta</option>
-              <option value="AMBIENTE_ESTUDIO">Ambiente de Estudio</option>
-            </select>
-            <input
-              type="text"
-              value={newReason}
-              onChange={(e) => setNewReason(e.target.value)}
-              placeholder="Justificación del registro manual"
-              className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
-              required
-            />
-            <button
-              type="submit"
-              className="w-full bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700 transition font-medium"
-            >
-              Registrar Asistencia
-            </button>
-          </form>
-        </div>
       </section>
 
-      {/* Cuadrícula de Modificación de Asistencia (RF-14) */}
-      <section className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <h2 className="text-lg font-semibold text-gray-700">
-              Control Detallado de Asistencia
-            </h2>
-            <div className="flex items-center gap-2">
-              <label
-                htmlFor="session-select"
-                className="text-xs font-medium text-gray-500 uppercase"
-              >
-                Sesión:
-              </label>
-              <select
-                id="session-select"
-                value={selectedSession?.id || ""}
-                onChange={(e) => handleSessionChange(e.target.value)}
-                className="text-sm border-gray-300 rounded shadow-sm focus:ring-blue-500 focus:border-blue-500 py-1"
-              >
-                {availableSessions.length === 0 && (
-                  <option value="">Sin sesiones registradas</option>
-                )}
-                {availableSessions.map((s) => (
-                  <option key={s.id} value={s.id} suppressHydrationWarning>
-                    {new Date(s.date).toLocaleDateString()} -{" "}
-                    {new Date(s.expectedStart).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}{" "}
-                    ({s.status})
-                  </option>
-                ))}
-              </select>
+      {/* --- SECCIÓN DE GESTIÓN DE ASISTENCIA --- */}
+      <section className="mt-12 relative">
+        <div className="absolute inset-0 bg-blue-50/30 rounded-[2rem] -m-4 border border-blue-100/50 pointer-events-none" />
+
+        <div className="relative space-y-8">
+          {/* Selector Maestro de Sesión (Control de Contexto) */}
+          <div className="bg-white p-8 rounded-2xl shadow-md shadow-blue-900/5 border border-blue-100 flex flex-col lg:flex-row items-center justify-between gap-8">
+            <div className="flex-1 text-center lg:text-left">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-[10px] font-black uppercase tracking-widest mb-3">
+                <span className="relative flex h-2 w-2">
+                  <span
+                    className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isCurrentSessionActive ? "bg-green-400" : "bg-amber-400"}`}
+                  ></span>
+                  <span
+                    className={`relative inline-flex rounded-full h-2 w-2 ${isCurrentSessionActive ? "bg-green-500" : "bg-amber-500"}`}
+                  ></span>
+                </span>
+                Contexto de Trabajo
+              </div>
+              <h2 className="text-2xl font-black text-gray-900 tracking-tight">
+                Gestión de Sesión Seleccionada
+              </h2>
+              <p className="text-gray-500 mt-1 max-w-md mx-auto lg:mx-0">
+                Los registros manuales y el control detallado a continuación se
+                aplican exclusivamente a la sesión que elija aquí.
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 bg-gray-50 p-2 rounded-2xl border border-gray-200 w-full lg:w-auto shadow-inner">
+              <div className="flex-1 sm:flex-none px-6 py-3 bg-white rounded-xl shadow-sm border border-gray-200">
+                <label
+                  htmlFor="session-select-master"
+                  className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 text-center sm:text-left"
+                >
+                  Seleccionar Sesión
+                </label>
+                <select
+                  id="session-select-master"
+                  value={selectedSession?.id || ""}
+                  onChange={(e) => handleSessionChange(e.target.value)}
+                  className="bg-transparent border-none font-black text-gray-800 focus:ring-0 p-0 text-lg cursor-pointer w-full"
+                >
+                  {availableSessions.length === 0 && (
+                    <option value="">Sin sesiones registradas</option>
+                  )}
+                  {availableSessions.map((s) => (
+                    <option key={s.id} value={s.id} suppressHydrationWarning>
+                      {new Date(s.date).toLocaleDateString("es-ES", {
+                        day: "2-digit",
+                        month: "short",
+                      })}{" "}
+                      -{" "}
+                      {new Date(s.expectedStart).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedSession && (
+                <div className="flex flex-col items-center px-8 py-3">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">
+                    Estado Actual
+                  </span>
+                  <span
+                    className={`text-sm font-black px-4 py-1 rounded-lg uppercase border-2 shadow-sm ${
+                      isCurrentSessionActive
+                        ? "bg-green-50 text-green-700 border-green-200 shadow-green-100"
+                        : "bg-amber-50 text-amber-700 border-amber-200 shadow-amber-100"
+                    }`}
+                  >
+                    {selectedSession.status === "ACTIVE"
+                      ? "Sesión Activa"
+                      : selectedSession.status}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
-          <div className="flex space-x-2">
-            <button
-              type="button"
-              onClick={() => fetchSessionData(group?.id, selectedSession?.id)}
-              className="text-sm text-blue-600 hover:underline font-medium"
-            >
-              Refrescar
-            </button>
-            <input
-              type="text"
-              placeholder="Filtrar por CUI o Nombre..."
-              className="border-gray-300 rounded-lg text-sm"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-gray-600">
-            <thead className="bg-gray-100 text-gray-700 uppercase font-semibold">
-              <tr>
-                <th className="px-6 py-4">CUI</th>
-                <th className="px-6 py-4">Estudiante</th>
-                <th className="px-6 py-4">Hora de Registro</th>
-                <th className="px-6 py-4">Estado Actual</th>
-                <th className="px-6 py-4">Motivo / Obs.</th>
-                <th className="px-6 py-4">Acciones de Corrección</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {filteredAttendances.map((record) => (
-                <tr key={record.id} className="hover:bg-gray-50 transition">
-                  <td className="px-6 py-4 font-medium text-gray-900">
-                    {record.studentCui}
-                  </td>
-                  <td className="px-6 py-4 text-gray-600">
-                    {record.name || "Sin nombre registrado"}
-                  </td>
-                  <td className="px-6 py-4" suppressHydrationWarning>
-                    {new Date(record.checkIn).toLocaleTimeString()}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={`px-2 py-1 rounded-full text-xs font-bold ${
-                        record.status === "PUNTUAL"
-                          ? "bg-green-100 text-green-700"
-                          : record.status === "TARDANZA"
-                            ? "bg-amber-100 text-amber-700"
-                            : record.status === "FALTA"
-                              ? "bg-red-100 text-red-700"
-                              : "bg-blue-100 text-blue-700"
-                      }`}
+
+          <div className="grid grid-cols-1 gap-8">
+            {/* Alta rápida de asistencia manual (RF-14) */}
+            <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 hover:border-blue-200 transition-colors">
+              <div className="flex items-center gap-4 mb-8">
+                <div className="h-10 w-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-black">
+                  +
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-gray-800">
+                    Registro Manual de Asistencia
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    Habilitado para la sesión seleccionada arriba.
+                  </p>
+                </div>
+              </div>
+              <form
+                onSubmit={handleCreateAttendance}
+                className="grid grid-cols-1 md:grid-cols-4 gap-6"
+              >
+                <div className="space-y-1">
+                  <label
+                    htmlFor="new-student-cui"
+                    className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1"
+                  >
+                    CUI Estudiante
+                  </label>
+                  <input
+                    id="new-student-cui"
+                    type="text"
+                    value={newStudentCui}
+                    onChange={(e) => setNewStudentCui(e.target.value)}
+                    placeholder="8 dígitos"
+                    className="w-full border-gray-200 bg-gray-50/50 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium"
+                    maxLength={8}
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label
+                    htmlFor="new-status"
+                    className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1"
+                  >
+                    Estado
+                  </label>
+                  <select
+                    id="new-status"
+                    value={newStatus}
+                    onChange={(e) =>
+                      setNewStatus(e.target.value as AttendanceRecord["status"])
+                    }
+                    className="w-full border-gray-200 bg-gray-50/50 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium"
+                  >
+                    <option value="PUNTUAL">Presente (Puntual)</option>
+                    <option value="TARDANZA">Tardanza</option>
+                    <option value="FALTA">Falta</option>
+                    <option value="AMBIENTE_ESTUDIO">
+                      Ambiente de Estudio
+                    </option>
+                  </select>
+                </div>
+                <div className="space-y-1 md:col-span-1">
+                  <label
+                    htmlFor="new-reason"
+                    className="text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1"
+                  >
+                    Observación
+                  </label>
+                  <input
+                    id="new-reason"
+                    type="text"
+                    value={newReason}
+                    onChange={(e) => setNewReason(e.target.value)}
+                    placeholder="Motivo del registro"
+                    className="w-full border-gray-200 bg-gray-50/50 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium"
+                    required
+                  />
+                </div>
+                <div className="flex flex-col justify-end">
+                  <button
+                    type="submit"
+                    className="w-full bg-blue-600 text-white py-3.5 rounded-xl hover:bg-blue-700 transition font-black shadow-lg shadow-blue-200 text-sm uppercase tracking-widest"
+                  >
+                    Registrar Asistencia
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* Cuadrícula de Modificación de Asistencia (RF-14) */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="p-6 border-b border-gray-50 bg-gray-50/30 flex flex-col xl:flex-row justify-between items-center gap-6">
+                <div className="flex items-center gap-4">
+                  <div className="h-10 w-10 bg-gray-800 rounded-xl flex items-center justify-center text-white font-black">
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
                     >
-                      {record.status}
-                    </span>
-                  </td>
-                  <td
-                    className="px-6 py-4 italic text-xs text-gray-500 max-w-xs truncate"
-                    title={record.observation || ""}
+                      <title>Icono de lista de asistencia</title>
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="3"
+                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                      ></path>
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black text-gray-800">
+                      Control Detallado
+                    </h3>
+                    <p className="text-sm text-gray-500">
+                      Listado completo de marcaciones registradas.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-col sm:flex-row items-center gap-3 w-full xl:w-auto">
+                  <div className="relative w-full sm:w-80">
+                    <label htmlFor="attendance-search" className="sr-only">
+                      Buscar por CUI o Nombre
+                    </label>
+                    <input
+                      id="attendance-search"
+                      type="text"
+                      placeholder="Buscar por CUI o Nombre..."
+                      className="w-full border-gray-200 bg-white rounded-xl pl-10 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                    <svg
+                      className="w-4 h-4 absolute left-3.5 top-3.5 text-gray-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <title>Icono de búsqueda</title>
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                      ></path>
+                    </svg>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      fetchSessionData(group?.id, selectedSession?.id)
+                    }
+                    className="w-full sm:w-auto px-6 py-2.5 bg-white text-gray-700 rounded-xl hover:bg-gray-50 transition text-sm font-bold border border-gray-200 shadow-sm flex items-center justify-center gap-2"
                   >
-                    {record.observation || "-"}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <select
-                        value={record.status}
-                        onChange={(e) =>
-                          handleStatusChange(
-                            record.studentCui,
-                            e.target.value as AttendanceRecord["status"],
-                            record.name,
-                          )
-                        }
-                        className="text-sm border-gray-300 rounded shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                        title="Cambiar estado de asistencia manualmente"
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <title>Icono de actualizar</title>
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                      ></path>
+                    </svg>
+                    Actualizar
+                  </button>
+                </div>{" "}
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm text-gray-600">
+                  <thead className="bg-gray-50 text-gray-400 uppercase text-[10px] font-black tracking-widest border-b border-gray-100">
+                    <tr>
+                      <th className="px-8 py-5">CUI</th>
+                      <th className="px-8 py-5">Estudiante</th>
+                      <th className="px-8 py-5">Marcación</th>
+                      <th className="px-8 py-5">Estado</th>
+                      <th className="px-8 py-5">Observaciones</th>
+                      <th className="px-8 py-5 text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 bg-white">
+                    {filteredAttendances.map((record) => (
+                      <tr
+                        key={record.id}
+                        className="hover:bg-blue-50/30 transition-colors group"
                       >
-                        <option value="PUNTUAL">Puntual</option>
-                        <option value="TARDANZA">Tardanza</option>
-                        <option value="FALTA">Falta</option>
-                        <option value="AMBIENTE_ESTUDIO">
-                          Ambiente de Estudio
-                        </option>
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleDeleteAttendance(record.studentCui, record.name)
-                        }
-                        className="text-sm text-red-600 hover:underline font-medium"
-                        title="Eliminar este registro de asistencia permanentemente"
-                      >
-                        Anular
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {filteredAttendances.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={6}
-                    className="px-6 py-8 text-center text-gray-500"
-                  >
-                    No se encontraron marcaciones para los criterios de
-                    búsqueda.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                        <td className="px-8 py-5 font-black text-gray-900">
+                          {record.studentCui}
+                        </td>
+                        <td className="px-8 py-5">
+                          <div className="font-bold text-gray-700 group-hover:text-blue-700 transition-colors">
+                            {record.name || "Sin nombre registrado"}
+                          </div>
+                        </td>
+                        <td
+                          className="px-8 py-5 text-gray-500 font-medium"
+                          suppressHydrationWarning
+                        >
+                          {new Date(record.checkIn).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </td>
+                        <td className="px-8 py-5">
+                          <span
+                            className={`px-3 py-1.5 rounded-lg text-[10px] font-black tracking-wider uppercase border-b-2 shadow-sm ${
+                              record.status === "PUNTUAL"
+                                ? "bg-green-100 text-green-700 border-green-200 shadow-green-50"
+                                : record.status === "TARDANZA"
+                                  ? "bg-amber-100 text-amber-700 border-amber-200 shadow-amber-50"
+                                  : record.status === "FALTA"
+                                    ? "bg-red-100 text-red-700 border-red-200 shadow-red-50"
+                                    : "bg-blue-100 text-blue-700 border-blue-200 shadow-blue-50"
+                            }`}
+                          >
+                            {record.status}
+                          </span>
+                        </td>
+                        <td
+                          className="px-8 py-5 italic text-xs text-gray-400 max-w-[200px] truncate font-medium"
+                          title={record.observation || ""}
+                        >
+                          {record.observation || "-"}
+                        </td>
+                        <td className="px-8 py-5 text-right">
+                          <div className="flex items-center justify-end gap-4">
+                            <select
+                              value={record.status}
+                              onChange={(e) =>
+                                handleStatusChange(
+                                  record.studentCui,
+                                  e.target.value as AttendanceRecord["status"],
+                                  record.name,
+                                )
+                              }
+                              className="text-[10px] font-bold border-gray-200 bg-gray-50 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 py-1.5 uppercase tracking-tighter cursor-pointer"
+                              title="Cambiar estado"
+                            >
+                              <option value="PUNTUAL">Puntual</option>
+                              <option value="TARDANZA">Tardanza</option>
+                              <option value="FALTA">Falta</option>
+                              <option value="AMBIENTE_ESTUDIO">Estudio</option>
+                            </select>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleDeleteAttendance(
+                                  record.studentCui,
+                                  record.name,
+                                )
+                              }
+                              className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                              title="Anular registro"
+                            >
+                              <svg
+                                className="w-5 h-5"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <title>Anular registro</title>
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth="2"
+                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                ></path>
+                              </svg>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {filteredAttendances.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={6}
+                          className="px-8 py-20 text-center text-gray-400 italic bg-gray-50/20"
+                        >
+                          <div className="flex flex-col items-center gap-2">
+                            <svg
+                              className="w-12 h-12 text-gray-200"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <title>Sin registros</title>
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="1"
+                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                              ></path>
+                            </svg>
+                            <p className="font-bold tracking-tight">
+                              No se encontraron marcaciones
+                            </p>
+                            <p className="text-xs">
+                              Intente con otro término de búsqueda o verifique
+                              la sesión.
+                            </p>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
     </div>

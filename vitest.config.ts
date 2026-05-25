@@ -10,5 +10,7 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
     exclude: ["node_modules", "dist", "build", "coverage", ".direnv"],
+    pool: "threads",
+    maxWorkers: 1,
   },
 });

@@ -215,7 +215,7 @@ export async function POST(request: NextRequest) {
       const tMinutes =
         toleranceMinutes !== undefined
           ? toleranceMinutes
-          : Number.parseInt(activeSession.toleranceMinutes);
+          : Number.parseInt(activeSession.toleranceMinutes, 10);
       const tType = toleranceType || activeSession.toleranceType;
 
       if (toleranceType || toleranceMinutes !== undefined) {
@@ -268,4 +268,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
