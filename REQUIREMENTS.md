@@ -25,7 +25,7 @@ A continuación, se presentan las tablas de requerimientos funcionales del siste
 | ID | Nombre | Descripción |
 | :--- | :--- | :--- |
 | **RF-04** | Validación de Matrícula y Flexibilidad de Grupo | El sistema debe comprobar que el identificador ingresado corresponda a un alumno formalmente matriculado en el curso dictado (obtenido del sistema simulado de la universidad). Se permitirá registrar la asistencia de alumnos matriculados en secciones o grupos diferentes (A, B, C, etc.) que asistan a una sesión distinta debido a acuerdos excepcionales autorizados por el docente. |
-| **RF-05** | Autogeneración de Sesión de Emergencia | En caso de que el docente no haya configurado o iniciado la sesión del día en el sistema, el ingreso del primer estudiante matriculado válido (verificado mediante la API simulada de la universidad) creará de forma automática la sesión actual basándose en los horarios del plan de estudios oficial, impidiendo que los alumnos se queden sin registrar su asistencia en la puerta. |
+| **RF-05** | Generación Automática de Sesión | El sistema crea de forma automática la sesión del día basándose en los horarios del plan de estudios oficial al registrarse el primer ingreso válido (ya sea del docente o de un alumno matriculado) en el tótem de la puerta. Esto garantiza que la asistencia se capture siempre sin necesidad de intervención manual previa para abrir la sesión. |
 
 ### Módulo 3: Control de Asistencia del Docente y Tolerancia Dinámica
 

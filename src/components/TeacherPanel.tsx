@@ -129,7 +129,6 @@ export default function TeacherPanel({
           groupId: selectedSession ? selectedSession.groupId : group?.id,
           toleranceType: toleranceMode,
           toleranceMinutes: toleranceMinutes,
-          onlyUpdateConfig: selectedSession !== null && !isCurrentSessionActive,
         }),
       });
       const data = await response.json();
@@ -137,9 +136,7 @@ export default function TeacherPanel({
         setMessage(
           isCurrentSessionActive
             ? "Configuración de sesión actualizada."
-            : selectedSession
-              ? "Configuración predeterminada actualizada."
-              : "Sesión iniciada manualmente.",
+            : "Configuración predeterminada actualizada.",
         );
         if (data.session) {
           setSelectedSession(data.session);
@@ -265,33 +262,6 @@ export default function TeacherPanel({
     }
   };
 
-  const handleCloseSession = async () => {
-    if (!selectedSession) {
-      setMessage("No hay sesión activa.");
-      return;
-    }
-    if (
-      !confirm(
-        "¿Está seguro de FINALIZAR la clase? \n\nEsto cerrará el registro de asistencia y marcará la salida automática de los alumnos presentes. \n\nSi solo desea salir del panel sin terminar la clase, use 'Volver al Kiosko'.",
-      )
-    )
-      return;
-
-    try {
-      const response = await fetch("/api/teacher/session/close", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: selectedSession?.id }),
-      });
-      const data = await response.json();
-      if (data.success) {
-        onLogout();
-      }
-    } catch (_error) {
-      setMessage("Error al cerrar sesión.");
-    }
-  };
-
   if (isLoading)
     return (
       <div className="p-8 text-center text-2xl font-bold">
@@ -351,19 +321,6 @@ export default function TeacherPanel({
           >
             Volver al Kiosko
           </button>
-          <button
-            type="button"
-            onClick={handleCloseSession}
-            disabled={!isCurrentSessionActive}
-            className={`px-4 py-2 rounded-lg transition font-medium ${
-              isCurrentSessionActive
-                ? "bg-red-600 text-white hover:bg-red-700"
-                : "bg-gray-200 text-gray-400 cursor-not-allowed"
-            }`}
-            title="Finaliza la clase actual y registra la salida de todos los alumnos"
-          >
-            Finalizar Clase
-          </button>
         </div>
       </header>
 
@@ -419,9 +376,7 @@ export default function TeacherPanel({
             >
               {isCurrentSessionActive
                 ? "Aplicar a Sesión"
-                : selectedSession
-                  ? "Actualizar Grupo"
-                  : "Iniciar Sesión Manual"}
+                : "Guardar Configuración"}
             </button>
           </div>
         </div>

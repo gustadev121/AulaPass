@@ -8,7 +8,7 @@ import * as swipeRoute from "../app/api/kiosk/swipe/route";
 import * as correctAttendanceRoute from "../app/api/teacher/attendance/correct/route";
 import * as teacherLoginRoute from "../app/api/teacher/login/route";
 import * as checkAbsenceRoute from "../app/api/teacher/session/check-absence/route";
-import * as closeSessionRoute from "../app/api/teacher/session/close/route";
+import { SessionService } from "@/lib/session-service";
 
 describe("API Integration Tests - Módulos 1, 2, 3, 4, 6, 8", () => {
   beforeEach(async () => {
@@ -554,35 +554,26 @@ describe("API Integration Tests - Módulos 1, 2, 3, 4, 6, 8", () => {
         status: "PUNTUAL",
       });
 
-      await testApiHandler({
-        appHandler: closeSessionRoute,
-        async test({ fetch }) {
-          const res = await fetch({
-            method: "POST",
-            body: JSON.stringify({ sessionId }),
-          });
-          const json = await res.json();
+      const result = await SessionService.closeSession(sessionId, "Cierre de Sesión");
 
-          expect(json.success).toBe(true);
-          expect(json.closedCount).toBe(1);
+      expect(result.success).toBe(true);
+      expect(result.forcedCheckOutCount).toBe(1);
 
-          const att = await db.select().from(attendances).limit(1);
-          expect(att[0].checkOut).toBe("2026-05-25T08:40:00.000Z");
-          expect(att[0].checkOutType).toBe("FORCED_BY_SESSION_CLOSE");
+      const att = await db.select().from(attendances).limit(1);
+      expect(att[0].checkOut).toBe("2026-05-25T08:40:00.000Z");
+      expect(att[0].checkOutType).toBe("FORCED_BY_SESSION_CLOSE");
 
-          // [RF-10] Verificar que los alumnos que NO marcaron ahora tienen estado FALTA
-          // Juan Pérez (20201234) ya marcó.
-          // Carlos Condori (20210001) y Ana Choque (20210002) son de SW-II-A y no marcaron.
-          const faltas = await db
-            .select()
-            .from(attendances)
-            .where(eq(attendances.status, "FALTA"));
-          expect(faltas.length).toBe(2);
+      // [RF-10] Verificar que los alumnos que NO marcaron ahora tienen estado FALTA
+      // Juan Pérez (20201234) ya marcó.
+      // Carlos Condori (20210001) y Ana Choque (20210002) son de SW-II-A y no marcaron.
+      const faltas = await db
+        .select()
+        .from(attendances)
+        .where(eq(attendances.status, "FALTA"));
+      expect(faltas.length).toBe(2);
           const cuis = faltas.map((f) => f.studentCui);
-          expect(cuis).toContain("20210001");
-          expect(cuis).toContain("20210002");
-        },
-      });
+      expect(cuis).toContain("20210001");
+      expect(cuis).toContain("20210002");
     });
 
     // TC-6.09: Inasistencias automáticas en cierre automático (Swipe)

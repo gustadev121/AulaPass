@@ -177,11 +177,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { groupId, toleranceType, toleranceMinutes, date, onlyUpdateConfig } =
-      body;
-
-    const now = date ? new Date(date) : new Date();
-    const dateString = now.toISOString().split("T")[0];
+    const { groupId, toleranceType, toleranceMinutes } = body;
 
     // Persistir configuración del grupo para futuras sesiones
     if (groupId && toleranceType && toleranceMinutes !== undefined) {
@@ -258,85 +254,15 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    if (onlyUpdateConfig) {
-      return NextResponse.json({
-        success: true,
-        message: "Configuración predeterminada del grupo actualizada.",
-      });
-    }
-
-    // Si no hay sesión activa, crear una nueva manualmente (Panel Docente)
-    const group = await UniversityService.getGroupById(groupId);
-    if (!groupId || !group) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "El grupo académico especificado no es válido.",
-        },
-        { status: 400 },
-      );
-    }
-
-    // Determinar la programación horaria oficial del grupo
-    const currentDay = now.getDay();
-    const mappedDay = currentDay === 0 ? 7 : currentDay;
-    const todaySchedule = group.schedules.find(
-      (s) => s.dayOfWeek === mappedDay,
-    );
-
-    let expectedStart = now;
-    let expectedEnd = new Date(now.getTime() + 100 * 60 * 1000); // 100 minutos por defecto
-
-    if (todaySchedule) {
-      const year = now.getFullYear();
-      const month = now.getMonth();
-      const d = now.getDate();
-      const [startH, startM] = todaySchedule.startTime.split(":").map(Number);
-      const [endH, endM] = todaySchedule.endTime.split(":").map(Number);
-
-      expectedStart = new Date(year, month, d, startH, startM, 0, 0);
-      expectedEnd = new Date(year, month, d, endH, endM, 0, 0);
-    }
-
-    const tMinutes = toleranceMinutes !== undefined ? toleranceMinutes : 15;
-    const tType = toleranceType || "STATIC";
-    let toleranceLimit = new Date(
-      expectedStart.getTime() + tMinutes * 60 * 1000,
-    ).toISOString();
-
-    // Si el docente la inicia manualmente ahora, su ingreso se registra en este momento
-    const teacherCheckIn = now.toISOString();
-    if (tType === "DYNAMIC") {
-      toleranceLimit = new Date(
-        now.getTime() + tMinutes * 60 * 1000,
-      ).toISOString();
-    }
-
-    const newSession = {
-      id: crypto.randomUUID(),
-      groupId: group.id,
-      date: dateString,
-      expectedStart: expectedStart.toISOString(),
-      expectedEnd: expectedEnd.toISOString(),
-      teacherCheckIn,
-      status: "ACTIVE" as const,
-      toleranceType: tType,
-      toleranceMinutes: String(tMinutes),
-      toleranceLimit,
-    };
-
-    await db.insert(sessions).values(newSession);
-
     return NextResponse.json({
       success: true,
-      message: "Sesión de clase iniciada manualmente con éxito.",
-      session: newSession,
+      message: "Configuración predeterminada del grupo actualizada.",
     });
   } catch (error) {
     return NextResponse.json(
       {
         success: false,
-        message: `Error al iniciar/actualizar sesión: ${error instanceof Error ? error.message : "Desconocido"}`,
+        message: `Error al actualizar configuración: ${error instanceof Error ? error.message : "Desconocido"}`,
       },
       { status: 500 },
     );
