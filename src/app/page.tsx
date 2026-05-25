@@ -4,11 +4,16 @@ import { useState } from "react";
 import KioskScreen from "@/components/KioskScreen";
 import TeacherPanel from "@/components/TeacherPanel";
 
+interface Teacher {
+  cui: string;
+  name: string;
+}
+
 export default function Home() {
   const [view, setView] = useState<"KIOSK" | "TEACHER">("KIOSK");
-  const [teacherData, setTeacherData] = useState<any>(null);
+  const [teacherData, setTeacherData] = useState<Teacher | null>(null);
 
-  const handleTeacherLogin = (data: any) => {
+  const handleTeacherLogin = (data: Teacher) => {
     setTeacherData(data);
     setView("TEACHER");
   };

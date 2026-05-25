@@ -119,6 +119,18 @@ export async function POST(request: NextRequest) {
         .then((res) => res[0]);
 
       if (session) {
+        if (session.status === "SUSPENDED") {
+          return NextResponse.json(
+            {
+              success: false,
+              color: "RED",
+              message:
+                "La sesión ha sido suspendida por inasistencia docente. No es posible registrar asistencia ahora.",
+            },
+            { status: 400 },
+          );
+        }
+
         if (session.teacherCheckIn) {
           return NextResponse.json({
             success: true,

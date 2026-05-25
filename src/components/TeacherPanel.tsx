@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import type React from "react";
+import { useCallback, useEffect, useState } from "react";
 
 interface AttendanceRecord {
   id: string;
@@ -8,6 +9,28 @@ interface AttendanceRecord {
   name?: string; // Vendrá del UniversityService en un mundo ideal, pero aquí lo manejamos
   checkIn: string;
   status: "PUNTUAL" | "TARDANZA" | "FALTA" | "AMBIENTE_ESTUDIO";
+}
+
+interface Session {
+  id: string;
+  groupId: string;
+  date: string;
+  expectedStart: string;
+  expectedEnd: string;
+  teacherCheckIn?: string | null;
+  status: "ACTIVE" | "CLOSED" | "SUSPENDED";
+  toleranceType: "STATIC" | "DYNAMIC";
+  toleranceLimit?: string | null;
+  virtualCode?: string | null;
+}
+
+interface Group {
+  id: string;
+  courseId: string;
+  courseName: string;
+  teacherCui: string;
+  name?: string;
+  classroom?: string;
 }
 
 interface TeacherPanelProps {
@@ -22,8 +45,8 @@ export default function TeacherPanel({
   teacherData,
   onLogout,
 }: TeacherPanelProps) {
-  const [activeSession, setActiveSession] = useState<any>(null);
-  const [group, setGroup] = useState<any>(null);
+  const [activeSession, setActiveSession] = useState<Session | null>(null);
+  const [group, setGroup] = useState<Group | null>(null);
   const [attendances, setAttendances] = useState<AttendanceRecord[]>([]);
   const [toleranceMode, setToleranceMode] = useState<"STATIC" | "DYNAMIC">(
     "STATIC",
@@ -38,7 +61,7 @@ export default function TeacherPanel({
 
   const [searchTerm, setSearchTerm] = useState("");
 
-  const fetchSessionData = async () => {
+  const fetchSessionData = useCallback(async () => {
     setIsLoading(true);
     try {
       const response = await fetch("/api/teacher/session");
@@ -51,16 +74,16 @@ export default function TeacherPanel({
         // Podríamos inferir los minutos si tuviéramos ese dato guardado,
         // por ahora dejamos el default de 15.
       }
-    } catch (error) {
-      console.error("Error fetching session:", error);
+    } catch (_error) {
+      // console.error("Error fetching session:", error);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchSessionData();
-  }, []);
+  }, [fetchSessionData]);
 
   const handleUpdateConfig = async () => {
     try {
@@ -77,7 +100,7 @@ export default function TeacherPanel({
         setMessage("Configuración actualizada.");
         setActiveSession(data.session);
       }
-    } catch (error) {
+    } catch (_error) {
       setMessage("Error al actualizar configuración.");
     }
   };
@@ -109,7 +132,7 @@ export default function TeacherPanel({
         fetchSessionData(); // Recargar datos
         setMessage(`Estado de ${studentName || studentCui} actualizado.`);
       }
-    } catch (error) {
+    } catch (_error) {
       setMessage("Error al actualizar estado.");
     }
   };
@@ -123,9 +146,7 @@ export default function TeacherPanel({
       return;
     }
     if (
-      !confirm(
-        `¿Desea anular la asistencia de ${studentName || studentCui}?`,
-      )
+      !confirm(`¿Desea anular la asistencia de ${studentName || studentCui}?`)
     )
       return;
 
@@ -148,7 +169,7 @@ export default function TeacherPanel({
       } else {
         setMessage(data.message || "Error al anular registro.");
       }
-    } catch (error) {
+    } catch (_error) {
       setMessage("Error al anular registro.");
     }
   };
@@ -189,7 +210,7 @@ export default function TeacherPanel({
       } else {
         setMessage(data.message || "Error al crear registro.");
       }
-    } catch (error) {
+    } catch (_error) {
       setMessage("Error al crear registro.");
     }
   };
@@ -216,7 +237,7 @@ export default function TeacherPanel({
       if (data.success) {
         onLogout();
       }
-    } catch (error) {
+    } catch (_error) {
       setMessage("Error al cerrar sesión.");
     }
   };
@@ -233,7 +254,7 @@ export default function TeacherPanel({
         setActiveSession(data.session);
         setMessage("Modo virtual activado.");
       }
-    } catch (error) {
+    } catch (_error) {
       setMessage("Error al activar modo virtual.");
     }
   };
@@ -261,6 +282,7 @@ export default function TeacherPanel({
           )}
         </div>
         <button
+          type="button"
           onClick={handleCloseSession}
           className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
         >
@@ -276,10 +298,14 @@ export default function TeacherPanel({
           </h2>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label
+                htmlFor="tolerance-mode"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
                 Modo de Tolerancia
               </label>
               <select
+                id="tolerance-mode"
                 value={toleranceMode}
                 onChange={(e) =>
                   setToleranceMode(e.target.value as "STATIC" | "DYNAMIC")
@@ -291,19 +317,26 @@ export default function TeacherPanel({
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label
+                htmlFor="tolerance-minutes"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
                 Minutos de Tolerancia
               </label>
               <input
+                id="tolerance-minutes"
                 type="number"
                 value={toleranceMinutes}
-                onChange={(e) => setToleranceMinutes(parseInt(e.target.value))}
+                onChange={(e) =>
+                  setToleranceMinutes(Number.parseInt(e.target.value, 10))
+                }
                 className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
                 min="0"
                 max="60"
               />
             </div>
             <button
+              type="button"
               onClick={handleUpdateConfig}
               className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition"
             >
@@ -351,6 +384,7 @@ export default function TeacherPanel({
               </div>
             ) : (
               <button
+                type="button"
                 onClick={handleActivateVirtual}
                 className="mt-2 px-4 py-1 text-sm border border-purple-600 text-purple-600 rounded-md hover:bg-purple-50"
               >
@@ -416,6 +450,7 @@ export default function TeacherPanel({
           </h2>
           <div className="flex space-x-2">
             <button
+              type="button"
               onClick={fetchSessionData}
               className="text-sm text-blue-600 hover:underline"
             >
@@ -489,6 +524,7 @@ export default function TeacherPanel({
                         </option>
                       </select>
                       <button
+                        type="button"
                         onClick={() =>
                           handleDeleteAttendance(record.studentCui, record.name)
                         }

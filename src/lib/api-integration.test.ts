@@ -1,14 +1,14 @@
-import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
+import { eq } from "drizzle-orm";
 import { testApiHandler } from "next-test-api-route-handler";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { db } from "@/db";
+import { attendances, auditLogs, sessions } from "@/db/schema";
+import { UniversityService } from "@/lib/university-service";
 import * as swipeRoute from "../app/api/kiosk/swipe/route";
-import * as virtualSwipeRoute from "../app/api/virtual/swipe/route";
+import * as correctAttendanceRoute from "../app/api/teacher/attendance/correct/route";
 import * as checkAbsenceRoute from "../app/api/teacher/session/check-absence/route";
 import * as closeSessionRoute from "../app/api/teacher/session/close/route";
-import * as correctAttendanceRoute from "../app/api/teacher/attendance/correct/route";
-import { db } from "@/db";
-import { sessions, attendances, auditLogs } from "@/db/schema";
-import { eq } from "drizzle-orm";
-import { UniversityService } from "@/lib/university-service";
+import * as virtualSwipeRoute from "../app/api/virtual/swipe/route";
 
 describe("API Integration Tests - Módulos 1, 2, 3, 4, 5, 6, 8", () => {
   beforeEach(async () => {
@@ -23,7 +23,7 @@ describe("API Integration Tests - Módulos 1, 2, 3, 4, 5, 6, 8", () => {
   });
 
   describe("Módulo 1: Acceso e Identificación (Panel Docente)", () => {
-    it("debe permitir el acceso del docente con credenciales válidas (TC-1.11)", async () => {
+    it("debe permitir el acceso del docente oficial asignado (TC-1.11, TC-3.01)", async () => {
       await testApiHandler({
         appHandler: swipeRoute,
         async test({ fetch }) {
@@ -39,6 +39,25 @@ describe("API Integration Tests - Módulos 1, 2, 3, 4, 5, 6, 8", () => {
           expect(res.status).toBe(200);
           expect(json.success).toBe(true);
           expect(json.role).toBe("TEACHER");
+        },
+      });
+    });
+
+    it("debe rechazar a un docente que no pertenece al curso en este horario (TC-3.02)", async () => {
+      await testApiHandler({
+        appHandler: swipeRoute,
+        async test({ fetch }) {
+          const res = await fetch({
+            method: "POST",
+            body: JSON.stringify({
+              DniCui: "11111111", // Docente ajeno
+              mockTime: "2026-05-25T12:05:00.000Z",
+            }),
+          });
+          const json = await res.json();
+
+          expect(res.status).toBe(400);
+          expect(json.success).toBe(false);
         },
       });
     });
@@ -136,6 +155,63 @@ describe("API Integration Tests - Módulos 1, 2, 3, 4, 5, 6, 8", () => {
         },
       });
     });
+
+    // TC-2.05: Alumno inválido ingresa primero
+    it("NO debe autogenerar sesión si un alumno inválido marca primero (TC-2.05)", async () => {
+      await testApiHandler({
+        appHandler: swipeRoute,
+        async test({ fetch }) {
+          const res = await fetch({
+            method: "POST",
+            body: JSON.stringify({
+              DniCui: "99999999", // Alumno no matriculado
+              mockTime: "2026-05-25T12:10:00.000Z",
+            }),
+          });
+          const json = await res.json();
+
+          expect(res.status).toBe(400);
+          expect(json.success).toBe(false);
+
+          // Verificar que NO se creó la sesión
+          const sess = await db.select().from(sessions).limit(1);
+          expect(sess.length).toBe(0);
+        },
+      });
+    });
+
+    // TC-2.06: Ingreso con sesión ya generada
+    it("debe usar la sesión existente si ya fue generada previamente (TC-2.06)", async () => {
+      const sessionId = crypto.randomUUID();
+      await db.insert(sessions).values({
+        id: sessionId,
+        groupId: "SW-II-A",
+        date: "2026-05-25",
+        expectedStart: "2026-05-25T12:00:00.000Z",
+        expectedEnd: "2026-05-25T13:40:00.000Z",
+        status: "ACTIVE",
+        toleranceType: "STATIC",
+        toleranceLimit: "2026-05-25T12:15:00.000Z",
+      });
+
+      await testApiHandler({
+        appHandler: swipeRoute,
+        async test({ fetch }) {
+          await fetch({
+            method: "POST",
+            body: JSON.stringify({
+              DniCui: "20201234",
+              mockTime: "2026-05-25T12:10:00.000Z",
+            }),
+          });
+
+          // Verificar que solo hay una sesión
+          const sess = await db.select().from(sessions);
+          expect(sess.length).toBe(1);
+          expect(sess[0].id).toBe(sessionId);
+        },
+      });
+    });
   });
 
   describe("Módulo 3: Inasistencia Docente (RF-08)", () => {
@@ -193,6 +269,38 @@ describe("API Integration Tests - Módulos 1, 2, 3, 4, 5, 6, 8", () => {
             .limit(1);
           expect(att[0].status).toBe("FALTA");
           expect(att[0].observation).toContain("Inasistencia Docente");
+        },
+      });
+    });
+
+    // TC-3.07: Llegada de docente tras límite de suspensión
+    it("debe rechazar marcación del docente si la sesión ya fue suspendida (TC-3.07)", async () => {
+      const sessionId = crypto.randomUUID();
+      await db.insert(sessions).values({
+        id: sessionId,
+        groupId: "SW-II-A",
+        date: "2026-05-25",
+        expectedStart: "2026-05-25T07:00:00.000Z",
+        expectedEnd: "2026-05-25T08:40:00.000Z",
+        status: "SUSPENDED",
+        toleranceType: "STATIC",
+        toleranceLimit: "2026-05-25T07:15:00.000Z",
+      });
+
+      await testApiHandler({
+        appHandler: swipeRoute,
+        async test({ fetch }) {
+          const res = await fetch({
+            method: "POST",
+            body: JSON.stringify({
+              DniCui: "10101010", // Docente oficial
+              mockTime: "2026-05-25T12:20:00.000Z",
+            }),
+          });
+          const json = await res.json();
+
+          expect(res.status).toBe(400);
+          expect(json.message).toContain("suspendida");
         },
       });
     });
@@ -284,6 +392,48 @@ describe("API Integration Tests - Módulos 1, 2, 3, 4, 5, 6, 8", () => {
 
           expect(res.status).toBe(400);
           expect(json.success).toBe(false);
+        },
+      });
+    });
+
+    // TC-5.04: Registro manual docente en contingencia virtual
+    it("debe permitir al docente registrar manualmente a un alumno en modo virtual (TC-5.04)", async () => {
+      const sessionId = crypto.randomUUID();
+      await db.insert(sessions).values({
+        id: sessionId,
+        groupId: "SW-II-A",
+        date: "2026-05-25",
+        expectedStart: "2026-05-25T07:00:00.000Z",
+        expectedEnd: "2026-05-25T08:40:00.000Z",
+        status: "ACTIVE",
+        toleranceType: "STATIC",
+        toleranceLimit: "2026-05-25T07:15:00.000Z",
+        virtualCode: "VIRT12",
+      });
+
+      await testApiHandler({
+        appHandler: correctAttendanceRoute,
+        async test({ fetch }) {
+          const res = await fetch({
+            method: "POST",
+            body: JSON.stringify({
+              operation: "CREATE",
+              studentCui: "20201234",
+              sessionId,
+              newStatus: "PUNTUAL",
+              reason: "Registro manual en clase virtual",
+              actorCui: "10101010",
+            }),
+          });
+          const json = await res.json();
+
+          expect(json.success).toBe(true);
+          const att = await db
+            .select()
+            .from(attendances)
+            .where(eq(attendances.sessionId, sessionId));
+          expect(att.length).toBe(1);
+          expect(att[0].status).toBe("PUNTUAL");
         },
       });
     });
@@ -471,6 +621,39 @@ describe("API Integration Tests - Módulos 1, 2, 3, 4, 5, 6, 8", () => {
           const log = await db.select().from(auditLogs).limit(1);
           expect(log[0].originalStatus).toBe("INEXISTENTE");
           expect(log[0].newStatus).toBe("FALTA");
+        },
+      });
+    });
+
+    // TC-6.04: Marcación física posterior al cierre automático
+    it("debe registrar AMBIENTE_ESTUDIO si un alumno auto-retirado vuelve a marcar (TC-6.04)", async () => {
+      const sessionId = crypto.randomUUID();
+      // Sesión que ya terminó
+      await db.insert(sessions).values({
+        id: sessionId,
+        groupId: "SW-II-A",
+        date: "2026-05-25",
+        expectedStart: "2026-05-25T07:00:00.000Z",
+        expectedEnd: "2026-05-25T08:40:00.000Z",
+        status: "CLOSED",
+        toleranceType: "STATIC",
+        toleranceLimit: "2026-05-25T07:15:00.000Z",
+      });
+
+      await testApiHandler({
+        appHandler: swipeRoute,
+        async test({ fetch }) {
+          const res = await fetch({
+            method: "POST",
+            body: JSON.stringify({
+              DniCui: "20201234",
+              mockTime: "2026-05-25T08:50:00.000Z", // Después del cierre
+            }),
+          });
+          const json = await res.json();
+
+          expect(res.status).toBe(200);
+          expect(json.status).toBe("AMBIENTE_ESTUDIO");
         },
       });
     });

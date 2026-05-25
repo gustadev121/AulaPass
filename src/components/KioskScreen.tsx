@@ -1,14 +1,20 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import type React from "react";
+import { useEffect, useRef, useState } from "react";
 import { identifierSchema } from "../lib/validations";
 
 type ScreenState = "IDLE" | "GREEN" | "AMBER" | "BLUE" | "RED";
 
+interface Teacher {
+  cui: string;
+  name: string;
+}
+
 export default function KioskScreen({
   onTeacherLogin,
 }: {
-  onTeacherLogin: (teacherData: any) => void;
+  onTeacherLogin: (teacherData: Teacher) => void;
 }) {
   const [inputValue, setInputValue] = useState("");
   const [screenState, setScreenState] = useState<ScreenState>("IDLE");
@@ -17,6 +23,7 @@ export default function KioskScreen({
   const [loginCui, setLoginCui] = useState("");
   const [loginError, setLoginError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const loginInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-enfoque persistente (RF-01)
   useEffect(() => {
@@ -24,6 +31,13 @@ export default function KioskScreen({
       inputRef.current?.focus();
     }
   }, [screenState, isLoginModalOpen]);
+
+  // Focus login input when modal opens
+  useEffect(() => {
+    if (isLoginModalOpen) {
+      setTimeout(() => loginInputRef.current?.focus(), 100);
+    }
+  }, [isLoginModalOpen]);
 
   // Temporizador de 3 segundos (RF-16)
   useEffect(() => {
@@ -52,8 +66,8 @@ export default function KioskScreen({
           setScreenState("RED");
           setMessage("Clase Suspendida: Inasistencia Docente");
         }
-      } catch (error) {
-        console.error("Error in absence polling:", error);
+      } catch (_error) {
+        // Silently fail polling
       }
     };
 
@@ -94,7 +108,7 @@ export default function KioskScreen({
       if (data.role === "TEACHER") {
         console.log("Docente detectado:", data.name);
       }
-    } catch (error) {
+    } catch (_error) {
       setScreenState("RED");
       setMessage("Error de conexión con el servidor.");
     }
@@ -118,7 +132,7 @@ export default function KioskScreen({
       } else {
         setLoginError("Identificador no válido para acceso docente.");
       }
-    } catch (error) {
+    } catch (_error) {
       setLoginError("Error de conexión.");
     }
   };
@@ -136,6 +150,7 @@ export default function KioskScreen({
       className={`min-h-screen flex flex-col items-center justify-center transition-colors duration-200 ${bgColors[screenState]}`}
     >
       <button
+        type="button"
         onClick={() => setIsLoginModalOpen(true)}
         className="absolute bottom-4 right-4 w-8 h-8 opacity-10 hover:opacity-100 transition-opacity text-gray-400 focus:outline-none"
         title="Acceso Docente"
@@ -147,7 +162,10 @@ export default function KioskScreen({
           strokeWidth={1.5}
           stroke="currentColor"
           className="w-6 h-6"
+          role="img"
+          aria-labelledby="lock-icon-title"
         >
+          <title id="lock-icon-title">Acceso Docente</title>
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -162,16 +180,20 @@ export default function KioskScreen({
             <h2 className="text-2xl font-bold mb-4">Acceso Docente</h2>
             <form onSubmit={handleTeacherLogin} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor="teacher-cui"
+                  className="block text-sm font-medium text-gray-700"
+                >
                   CUI o DNI del Docente
                 </label>
                 <input
+                  id="teacher-cui"
+                  ref={loginInputRef}
                   type="text"
                   value={loginCui}
                   onChange={(e) => setLoginCui(e.target.value)}
                   className="mt-1 block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 text-2xl p-3"
                   placeholder="12345678"
-                  autoFocus
                 />
               </div>
               {loginError && (

@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import KioskScreen from "./KioskScreen";
 
 const fetchMock = vi.fn<typeof fetch>();
@@ -224,6 +224,13 @@ describe(
         vi.advanceTimersByTime(10);
       });
       expect(screen.getByText("Ingrese su CUI o DNI")).toBeInTheDocument();
+
+      // 3.01s - Debe permanecer en estado base (TC-7.07)
+      await act(async () => {
+        vi.advanceTimersByTime(10);
+      });
+      expect(screen.getByText("Ingrese su CUI o DNI")).toBeInTheDocument();
+      expect(screen.queryByText("Exitoso")).not.toBeInTheDocument();
     });
 
     it("debe auto-enfocar el input tras restablecerse (TC-7.08)", async () => {

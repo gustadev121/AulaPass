@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import type React from "react";
+import { useState } from "react";
 
 export default function VirtualSwipePage() {
   const [cui, setCui] = useState("");
@@ -33,7 +34,7 @@ export default function VirtualSwipePage() {
         setStatus("ERROR");
         setMessage(data.message);
       }
-    } catch (error) {
+    } catch (_error) {
       setStatus("ERROR");
       setMessage("Error de conexión con el servidor.");
     } finally {
@@ -53,10 +54,14 @@ export default function VirtualSwipePage() {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label
+              htmlFor="cui-input"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
               CUI / DNI (8 dígitos)
             </label>
             <input
+              id="cui-input"
               type="text"
               value={cui}
               onChange={(e) => setCui(e.target.value)}
@@ -68,10 +73,14 @@ export default function VirtualSwipePage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label
+              htmlFor="session-code"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
               Código de Sesión (6 dígitos)
             </label>
             <input
+              id="session-code"
               type="text"
               value={virtualCode}
               onChange={(e) => setVirtualCode(e.target.value)}

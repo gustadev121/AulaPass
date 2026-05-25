@@ -366,7 +366,7 @@ describe("AttendanceRulesEngine - Pruebas Iniciales de Caja Negra", () => {
 
   describe("RNF-01 - Robustez", () => {
     it("debe manejar inputs nulos o incompletos sin crashear", () => {
-      // @ts-ignore: Prueba de robustez en runtime
+      // @ts-expect-error: Prueba de robustez en runtime
       const result1 = AttendanceRulesEngine.evaluateStudentSwipe(null, false);
       expect(result1.valid).toBe(false);
       expect(result1.message).toContain("inválidos");
@@ -375,7 +375,7 @@ describe("AttendanceRulesEngine - Pruebas Iniciales de Caja Negra", () => {
         student: mockStudent,
         // Falta currentTime
       };
-      // @ts-ignore: Prueba de robustez
+      // @ts-expect-error: Prueba de robustez
       const result2 = AttendanceRulesEngine.evaluateStudentSwipe(
         incompleteInput,
         false,
@@ -385,6 +385,51 @@ describe("AttendanceRulesEngine - Pruebas Iniciales de Caja Negra", () => {
   });
 
   describe("RF-13 - Cierre Automático (Valores Límite)", () => {
+    // TC-6.01 y TC-6.02: Salida justo antes o en el cierre
+    it("debe permitir salida NORMAL justo antes del cierre (TC-6.01)", () => {
+      const input: AttendanceRuleInput = {
+        currentTime: new Date("2026-05-24T09:29:59Z"),
+        student: mockStudent,
+        activeSession: {
+          id: "sess-1",
+          groupId: "SW-II-A",
+          expectedStart: new Date("2026-05-24T08:00:00Z"),
+          expectedEnd: new Date("2026-05-24T09:30:00Z"),
+          teacherCheckIn: new Date("2026-05-24T08:00:00Z"),
+          status: "ACTIVE",
+          toleranceType: "STATIC",
+          toleranceLimit: new Date("2026-05-24T08:10:00Z"),
+        },
+        currentCourseGroups,
+        classroomSchedules: [],
+      };
+      const result = AttendanceRulesEngine.evaluateStudentSwipe(input, true);
+      expect(result.swipeType).toBe("SALIDA");
+      expect(result.valid).toBe(true);
+    });
+
+    it("debe permitir salida NORMAL exactamente en el cierre (TC-6.02)", () => {
+      const input: AttendanceRuleInput = {
+        currentTime: new Date("2026-05-24T09:30:00Z"),
+        student: mockStudent,
+        activeSession: {
+          id: "sess-1",
+          groupId: "SW-II-A",
+          expectedStart: new Date("2026-05-24T08:00:00Z"),
+          expectedEnd: new Date("2026-05-24T09:30:00Z"),
+          teacherCheckIn: new Date("2026-05-24T08:00:00Z"),
+          status: "ACTIVE",
+          toleranceType: "STATIC",
+          toleranceLimit: new Date("2026-05-24T08:10:00Z"),
+        },
+        currentCourseGroups,
+        classroomSchedules: [],
+      };
+      const result = AttendanceRulesEngine.evaluateStudentSwipe(input, true);
+      expect(result.swipeType).toBe("SALIDA");
+      expect(result.valid).toBe(true);
+    });
+
     it("debe marcar como salida forzada a los alumnos que no registraron su salida", () => {
       const attendances = [
         {
