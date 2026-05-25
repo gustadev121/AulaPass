@@ -336,9 +336,9 @@ export async function POST(request: NextRequest) {
         });
 
         // Mapear estado al color visual (RF-15)
-        let color: "VERDE" | "AMBAR" | "ROJO" | "BLUE" = "VERDE";
-        if (result.status === "TARDANZA") color = "AMBAR";
-        else if (result.status === "FALTA") color = "ROJO";
+        let color: "GREEN" | "AMBER" | "RED" | "BLUE" = "GREEN";
+        if (result.status === "TARDANZA") color = "AMBER";
+        else if (result.status === "FALTA") color = "RED";
         else if (result.status === "AMBIENTE_ESTUDIO") color = "BLUE";
 
         return NextResponse.json({
@@ -434,7 +434,7 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json({
           success: true,
-          color: "VERDE",
+          color: "GREEN",
           role: "STUDENT",
           name: student.name,
           swipeType: "ENTRADA",

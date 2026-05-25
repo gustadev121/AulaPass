@@ -5,18 +5,21 @@ import { identifierSchema } from '../lib/validations';
 
 type ScreenState = 'IDLE' | 'GREEN' | 'AMBER' | 'BLUE' | 'RED';
 
-export default function KioskScreen() {
+export default function KioskScreen({ onTeacherLogin }: { onTeacherLogin: (teacherData: any) => void }) {
   const [inputValue, setInputValue] = useState('');
   const [screenState, setScreenState] = useState<ScreenState>('IDLE');
   const [message, setMessage] = useState('Ingrese su CUI o DNI');
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [loginCui, setLoginCui] = useState('');
+  const [loginError, setLoginError] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Auto-enfoque persistente (RF-01)
   useEffect(() => {
-    if (screenState === 'IDLE') {
+    if (screenState === 'IDLE' && !isLoginModalOpen) {
       inputRef.current?.focus();
     }
-  }, [screenState]);
+  }, [screenState, isLoginModalOpen]);
 
   // Temporizador de 3 segundos (RF-16)
   useEffect(() => {
@@ -30,10 +33,33 @@ export default function KioskScreen() {
     }
   }, [screenState]);
 
+  // Polling de inasistencia docente (RF-08)
+  useEffect(() => {
+    const checkAbsence = async () => {
+      try {
+        const response = await fetch('/api/teacher/session/check-absence', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ maxTeacherDelayMinutes: 20 })
+        });
+        const data = await response.json();
+        
+        if (data.suspended) {
+          setScreenState('RED');
+          setMessage('Clase Suspendida: Inasistencia Docente');
+        }
+      } catch (error) {
+        console.error('Error in absence polling:', error);
+      }
+    };
+
+    const interval = setInterval(checkAbsence, 60000); // Cada 60 segundos
+    return () => clearInterval(interval);
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validación estricta en cliente (RF-03)
     const validation = identifierSchema.safeParse(inputValue);
     if (!validation.success) {
       setScreenState('RED');
@@ -41,23 +67,55 @@ export default function KioskScreen() {
       return;
     }
 
-    // Aquí iría la llamada al endpoint del Integrante 2 (fetch).
-    // Simulamos la respuesta visual para probar el motor de estados.
-    const mockResponseStatus: ScreenState = 'GREEN'; // Cambiar para probar: GREEN, AMBER, BLUE, RED
-    
-    setScreenState(mockResponseStatus);
-    
-    const messages = {
-      GREEN: 'Registro exitoso: Puntual',
-      AMBER: 'Registro exitoso: Tardanza',
-      BLUE: 'Registro de Salida / Ambiente de Estudio',
-      RED: 'Error: No matriculado o Falta',
-      IDLE: ''
-    };
-    setMessage(messages[mockResponseStatus]);
+    try {
+      const response = await fetch('/api/kiosk/swipe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ DniCui: inputValue })
+      });
+      
+      const data = await response.json();
+      
+      if (data.color) {
+        setScreenState(data.color as ScreenState);
+      } else {
+        setScreenState(data.success ? 'GREEN' : 'RED');
+      }
+      
+      setMessage(data.message || (data.success ? 'Registro exitoso' : 'Error en el registro'));
+      
+      if (data.role === 'TEACHER') {
+          console.log('Docente detectado:', data.name);
+      }
+    } catch (error) {
+      setScreenState('RED');
+      setMessage('Error de conexión con el servidor.');
+    }
   };
 
-  // Diccionario de colores (RF-15)
+  const handleTeacherLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError('');
+    
+    try {
+      const response = await fetch('/api/kiosk/swipe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ DniCui: loginCui })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success && data.role === 'TEACHER') {
+        onTeacherLogin(data);
+      } else {
+        setLoginError('Identificador no válido para acceso docente.');
+      }
+    } catch (error) {
+      setLoginError('Error de conexión.');
+    }
+  };
+
   const bgColors = {
     IDLE: 'bg-gray-50 text-gray-900',
     GREEN: 'bg-green-500 text-white',
@@ -68,6 +126,53 @@ export default function KioskScreen() {
 
   return (
     <div className={`min-h-screen flex flex-col items-center justify-center transition-colors duration-200 ${bgColors[screenState]}`}>
+      <button 
+        onClick={() => setIsLoginModalOpen(true)}
+        className="absolute bottom-4 right-4 w-8 h-8 opacity-10 hover:opacity-100 transition-opacity text-gray-400 focus:outline-none"
+        title="Acceso Docente"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25-2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+        </svg>
+      </button>
+
+      {isLoginModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md text-gray-900">
+            <h2 className="text-2xl font-bold mb-4">Acceso Docente</h2>
+            <form onSubmit={handleTeacherLogin} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">CUI o DNI del Docente</label>
+                <input
+                  type="text"
+                  value={loginCui}
+                  onChange={(e) => setLoginCui(e.target.value)}
+                  className="mt-1 block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 text-2xl p-3"
+                  placeholder="12345678"
+                  autoFocus
+                />
+              </div>
+              {loginError && <p className="text-red-600 text-sm">{loginError}</p>}
+              <div className="flex justify-end space-x-3">
+                <button 
+                  type="button" 
+                  onClick={() => setIsLoginModalOpen(false)}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit"
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                >
+                  Ingresar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <div className="text-center space-y-8">
         <h1 className="text-6xl font-bold tracking-tight">{message}</h1>
         
@@ -84,7 +189,6 @@ export default function KioskScreen() {
               maxLength={8}
               autoComplete="off"
             />
-            {/* Ocultamos el botón físico para incentivar el uso de lector de barras o tecla Enter */}
             <button type="submit" className="hidden">Registrar</button>
           </form>
         )}
