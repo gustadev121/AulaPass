@@ -18,7 +18,7 @@ export default function KioskScreen({
 }) {
   const [inputValue, setInputValue] = useState("");
   const [screenState, setScreenState] = useState<ScreenState>("IDLE");
-  const [message, setMessage] = useState("Ingrese su CUI o DNI");
+  const [message, setMessage] = useState("Ingrese su CUI");
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [loginCode, setLoginCode] = useState("");
   const [loginError, setLoginError] = useState("");
@@ -45,7 +45,7 @@ export default function KioskScreen({
       const timer = setTimeout(() => {
         setScreenState("IDLE");
         setInputValue("");
-        setMessage("Ingrese su CUI o DNI");
+        setMessage("Ingrese su CUI");
       }, 3000);
       return () => clearTimeout(timer);
     }
@@ -118,11 +118,17 @@ export default function KioskScreen({
     e.preventDefault();
     setLoginError("");
 
+    const validation = identifierSchema.safeParse(loginCode);
+    if (!validation.success) {
+      setLoginError("Código docente inválido. Use 8 dígitos numéricos.");
+      return;
+    }
+
     try {
-      const response = await fetch("/api/kiosk/swipe", {
+      const response = await fetch("/api/teacher/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ DniCui: loginCode }),
+        body: JSON.stringify({ teacherCode: loginCode }),
       });
 
       const data = await response.json();
@@ -130,7 +136,7 @@ export default function KioskScreen({
       if (data.success && data.role === "TEACHER") {
         onTeacherLogin(data);
       } else {
-        setLoginError("Identificador no válido para acceso docente.");
+        setLoginError(data.message || "Código docente no válido.");
       }
     } catch (_error) {
       setLoginError("Error de conexión.");
@@ -184,7 +190,7 @@ export default function KioskScreen({
                   htmlFor="teacher-code"
                   className="block text-sm font-medium text-gray-700"
                 >
-                  CUI o DNI del Docente
+                  Código docente (8 dígitos)
                 </label>
                 <input
                   id="teacher-code"
@@ -193,7 +199,8 @@ export default function KioskScreen({
                   value={loginCode}
                   onChange={(e) => setLoginCode(e.target.value)}
                   className="mt-1 block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 text-2xl p-3"
-                  placeholder="12345678"
+                  placeholder="10101010"
+                  maxLength={8}
                 />
               </div>
               {loginError && (

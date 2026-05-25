@@ -4,8 +4,13 @@ import { db } from "@/db";
 import { attendances, auditLogs, sessions } from "@/db/schema";
 import { UniversityService } from "@/lib/university-service";
 
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url);
+    const mockTime = searchParams.get("mockTime");
+    const teacherCode = searchParams.get("teacherCode");
+    const now = mockTime ? new Date(mockTime) : new Date();
+
     const activeSession = await db
       .select()
       .from(sessions)
@@ -14,6 +19,44 @@ export async function GET(_request: NextRequest) {
       .then((res) => res[0]);
 
     if (!activeSession) {
+      // Intentar encontrar clase programada ahora (RF-05, RF-06)
+      const schedules = await UniversityService.getClassroomSchedule();
+      const currentDay = now.getDay();
+      const mappedDay = currentDay === 0 ? 7 : currentDay;
+
+      let matchedGroup = null;
+      for (const item of schedules) {
+        if (item.schedule.dayOfWeek === mappedDay) {
+          const { expectedStart, expectedEnd } =
+            UniversityService.getDatesForSchedule(
+              now,
+              item.schedule.startTime,
+              item.schedule.endTime,
+            );
+
+          // Margen de 30 min antes del inicio (como en swipe)
+          const earliestStart = new Date(
+            expectedStart.getTime() - 30 * 60 * 1000,
+          );
+
+          if (now >= earliestStart && now <= expectedEnd) {
+            // Si se proporciona teacherCode, debe coincidir
+            if (!teacherCode || item.group.teacherCode === teacherCode) {
+              matchedGroup = item.group;
+              break;
+            }
+          }
+        }
+      }
+
+      if (matchedGroup) {
+        return NextResponse.json({
+          active: false,
+          session: null,
+          group: matchedGroup,
+        });
+      }
+
       return NextResponse.json({ active: false, session: null });
     }
 

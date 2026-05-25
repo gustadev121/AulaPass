@@ -16,8 +16,8 @@ Este documento contiene el catálogo exhaustivo y definitivo de casos de prueba 
 | TC-1.08 | Identificador con espacios intermedios (8 caracteres) | RF-03 | Input: "1234 567" | Entrada rechazada inmediatamente por formato inválido. | PE |
 | TC-1.09 | Identificador numérico negativo (8 caracteres) | RF-03 | Input: "-1234567" | Entrada rechazada inmediatamente por contener un signo (carácter especial). | PE |
 | TC-1.10 | Identificador con ceros a la izquierda (Leading Zeros) | RF-03 | Input: "01234567" | Entrada aceptada. Procesado como string numérico de 8 caracteres (no como entero de 7). | PE |
-| TC-1.11 | Autenticación de Panel Docente: Credenciales válidas | RF-02 | Ingreso de usuario/contraseña correctos del docente. | Acceso concedido al panel administrativo del aula. | PE |
-| TC-1.12 | Autenticación de Panel Docente: Credenciales inválidas | RF-02 | Ingreso de credenciales erróneas o formato incorrecto. | Acceso denegado. Se muestra mensaje de error. | PE |
+| TC-1.11 | Autenticación de Panel Docente: Código docente válido | RF-02 | Ingreso de código docente correcto (8 dígitos). | Acceso concedido al panel administrativo del aula. | PE |
+| TC-1.12 | Autenticación de Panel Docente: Código docente inválido | RF-02 | Ingreso de código docente erróneo o con formato inválido. | Acceso denegado. Se muestra mensaje de error. | PE |
 
 ## Módulo 2: Flexibilidad de Grupos Académicos y Registro Automatizado
 
@@ -36,13 +36,14 @@ Este documento contiene el catálogo exhaustivo y definitivo de casos de prueba 
 
 | ID Caso | Descripción | Requerimiento | Datos de Entrada / Estado | Resultado Esperado | Técnica |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| TC-3.01 | Ingreso de docente oficial asignado al curso | RF-06 | ID válido del docente titular. | Registra asistencia laboral. Habilita inicio oficial del dictado. | PE |
-| TC-3.02 | Ingreso de docente ajeno al curso | RF-06 | ID de un profesor no asignado a la sesión. | Marcación rechazada. No inicia la sesión. | PE |
+| TC-3.01 | Ingreso de docente oficial asignado al curso (CUI) | RF-06 | CUI válido del docente titular. | Registra asistencia laboral. Habilita inicio oficial del dictado. | PE |
+| TC-3.02 | Ingreso de docente ajeno al curso (CUI) | RF-06 | CUI de un profesor no asignado a la sesión. | Marcación rechazada. No inicia la sesión. | PE |
 | TC-3.03 | Límite de inasistencia docente (1 segundo antes del límite) | RF-08 | Docente marca en T = 14m 59s. | Marcación procesada. Sesión inicia formalmente. | AVL |
 | TC-3.04 | Límite de inasistencia docente (En el límite exacto) | RF-08 | Docente marca en T = 15m 00s. | Marcación procesada. Sesión inicia formalmente. | AVL |
 | TC-3.05 | Límite de inasistencia docente (1 segundo después del límite) | RF-08 | T transcurrido = 15m 01s. | El sistema cierra la sesión, asigna estado "Clase Suspendida / Inasistencia Docente". | AVL |
 | TC-3.06 | Actualización retroactiva tras suspensión por inasistencia | RF-08 | Alumnos marcaron entrada a los 5m. En T = 15m 01s se suspende. | Todos los alumnos ingresados antes del límite heredan automáticamente la etiqueta de "Clase Suspendida". | PE |
 | TC-3.07 | Llegada de docente tras límite de suspensión (Intento reapertura) | RF-08 | Sesión ya suspendida. Docente marca en T = 15m 02s. | El sistema rechaza la marcación del docente y mantiene la sesión como clausurada. | AVL |
+| TC-3.08 | Tolerancia Dinámica Automática por Llegada Tardía Docente | RF-07, 10 | Docente llega tarde (Ej: T=09:10 para clase 08:50). Alumno llega a T=09:11. | El sistema activa automáticamente la modalidad dinámica para no perjudicar al alumno. Alumno marcado como **TARDANZA**. | PE |
 
 ## Módulo 4: Flujos de Permanencia, Salida y Horas Hueco
 

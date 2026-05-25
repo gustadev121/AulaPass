@@ -19,23 +19,6 @@ const swipeSchema = z.object({
 const DUPLICATE_WINDOW_MS = 50;
 const recentStudentSwipes = new Map<string, number>();
 
-function getDatesForSchedule(
-  currentTime: Date,
-  startTimeStr: string,
-  endTimeStr: string,
-) {
-  const [startH, startM] = startTimeStr.split(":").map(Number);
-  const [endH, endM] = endTimeStr.split(":").map(Number);
-
-  const expectedStart = new Date(currentTime);
-  expectedStart.setHours(startH, startM, 0, 0);
-
-  const expectedEnd = new Date(currentTime);
-  expectedEnd.setHours(endH, endM, 0, 0);
-
-  return { expectedStart, expectedEnd };
-}
-
 export async function POST(request: NextRequest) {
   const startTime = Date.now(); // Para control de tiempo de respuesta (RNF-02)
 
@@ -61,8 +44,8 @@ export async function POST(request: NextRequest) {
 
     const dateString = now.toISOString().split("T")[0]; // YYYY-MM-DD
 
-    // 1. Verificar si es Docente (RF-06)
-    const teacher = await UniversityService.getTeacherByCode(DniCui);
+    // 1. Verificar si es Docente (RF-06) usando CUI
+    const teacher = await UniversityService.getTeacherByCui(DniCui);
     if (teacher) {
       // Buscar si el docente tiene una clase programada en el aula en este bloque
       const classroomSchedules = await UniversityService.getClassroomSchedule();
@@ -75,11 +58,12 @@ export async function POST(request: NextRequest) {
           group.teacherCode === teacher.code &&
           item.schedule.dayOfWeek === mappedDay
         ) {
-          const { expectedStart, expectedEnd } = getDatesForSchedule(
-            now,
-            item.schedule.startTime,
-            item.schedule.endTime,
-          );
+          const { expectedStart, expectedEnd } =
+            UniversityService.getDatesForSchedule(
+              now,
+              item.schedule.startTime,
+              item.schedule.endTime,
+            );
           const earliestStart = new Date(
             expectedStart.getTime() - 30 * 60 * 1000,
           );
@@ -137,6 +121,7 @@ export async function POST(request: NextRequest) {
             role: "TEACHER",
             name: teacher.name,
             code: teacher.code,
+            cui: teacher.cui,
             message: `Bienvenido docente ${teacher.name}. Asistencia ya registrada previamente.`,
           });
         }
@@ -144,9 +129,19 @@ export async function POST(request: NextRequest) {
         // Actualizar sesión que fue iniciada de forma automática por un alumno (RF-05)
         const updatedTeacherCheckIn = now.toISOString();
         let toleranceLimit = session.toleranceLimit;
+        let toleranceType = session.toleranceType;
+
+        // [MEJORA] Si el docente llega tarde y la sesión era estática, cambiamos a dinámica 
+        // para no perjudicar a los alumnos que vienen con él.
+        const expectedStart = new Date(session.expectedStart);
+        const isLateTeacher = now.getTime() > expectedStart.getTime() + 15 * 60 * 1000;
+        
+        if (isLateTeacher && toleranceType === "STATIC") {
+          toleranceType = "DYNAMIC";
+        }
 
         // Si es dinámica, re-calculamos el límite a partir de la llegada del docente (RF-07)
-        if (session.toleranceType === "DYNAMIC") {
+        if (toleranceType === "DYNAMIC") {
           // Asumimos 15 minutos por defecto si no está especificado
           toleranceLimit = new Date(
             now.getTime() + 15 * 60 * 1000,
@@ -157,19 +152,24 @@ export async function POST(request: NextRequest) {
           .update(sessions)
           .set({
             teacherCheckIn: updatedTeacherCheckIn,
+            toleranceType: toleranceType,
             toleranceLimit: toleranceLimit,
           })
           .where(eq(sessions.id, session.id));
       } else {
         // Crear nueva sesión iniciada por el docente
-        const { expectedStart, expectedEnd } = getDatesForSchedule(
+        const { expectedStart, expectedEnd } = UniversityService.getDatesForSchedule(
           now,
           matchedSchedule.startTime,
           matchedSchedule.endTime,
         );
         const toleranceMinutes = 15; // 15 min de tolerancia por defecto
-        const toleranceLimit = new Date(
-          expectedStart.getTime() + toleranceMinutes * 60 * 1000,
+        
+        // [MEJORA] Si el docente llega tarde, iniciamos con tolerancia dinámica
+        const isLateTeacher = now.getTime() > expectedStart.getTime() + toleranceMinutes * 60 * 1000;
+        const tType = isLateTeacher ? "DYNAMIC" : "STATIC";
+        const tLimit = new Date(
+          (isLateTeacher ? now : expectedStart).getTime() + toleranceMinutes * 60 * 1000,
         ).toISOString();
 
         await db.insert(sessions).values({
@@ -180,8 +180,8 @@ export async function POST(request: NextRequest) {
           expectedEnd: expectedEnd.toISOString(),
           teacherCheckIn: now.toISOString(),
           status: "ACTIVE",
-          toleranceType: "STATIC",
-          toleranceLimit: toleranceLimit,
+          toleranceType: tType,
+          toleranceLimit: tLimit,
         });
       }
 
@@ -191,6 +191,7 @@ export async function POST(request: NextRequest) {
         role: "TEACHER",
         name: teacher.name,
         code: teacher.code,
+        cui: teacher.cui,
         message: `Asistencia del docente ${teacher.name} registrada con éxito. Clase iniciada.`,
       });
     }
@@ -348,7 +349,7 @@ export async function POST(request: NextRequest) {
         // Es una Entrada, evaluar reglas de asistencia
         // Formatear los horarios para el motor de reglas
         const formattedSchedules = classroomSchedules.map((item) => {
-          const { expectedStart, expectedEnd } = getDatesForSchedule(
+          const { expectedStart, expectedEnd } = UniversityService.getDatesForSchedule(
             now,
             item.schedule.startTime,
             item.schedule.endTime,
@@ -429,7 +430,7 @@ export async function POST(request: NextRequest) {
 
       for (const item of classroomSchedules) {
         if (item.schedule.dayOfWeek === mappedDay) {
-          const { expectedStart, expectedEnd } = getDatesForSchedule(
+          const { expectedStart, expectedEnd } = UniversityService.getDatesForSchedule(
             now,
             item.schedule.startTime,
             item.schedule.endTime,
@@ -465,7 +466,7 @@ export async function POST(request: NextRequest) {
 
       if (matchedSchedule && matchedGroup) {
         // [RF-05] Autogenerar sesión de emergencia
-        const { expectedStart, expectedEnd } = getDatesForSchedule(
+        const { expectedStart, expectedEnd } = UniversityService.getDatesForSchedule(
           now,
           matchedSchedule.startTime,
           matchedSchedule.endTime,

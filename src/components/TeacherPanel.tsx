@@ -29,7 +29,6 @@ interface Group {
   courseId: string;
   courseName: string;
   teacherCode: string;
-  name?: string;
   classroom?: string;
 }
 
@@ -64,11 +63,15 @@ export default function TeacherPanel({
   const fetchSessionData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await fetch("/api/teacher/session");
+      const response = await fetch(
+        `/api/teacher/session?teacherCode=${teacherData.code}`,
+      );
       const data = await response.json();
+      if (data.group) {
+        setGroup(data.group);
+      }
       if (data.active) {
         setActiveSession(data.session);
-        setGroup(data.group);
         setAttendances(data.attendances);
         setToleranceMode(data.session.toleranceType);
         // Podríamos inferir los minutos si tuviéramos ese dato guardado,
@@ -79,7 +82,7 @@ export default function TeacherPanel({
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [teacherData.code]);
 
   useEffect(() => {
     fetchSessionData();
@@ -91,14 +94,24 @@ export default function TeacherPanel({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          groupId: activeSession ? activeSession.groupId : group?.id,
           toleranceType: toleranceMode,
           toleranceMinutes: toleranceMinutes,
         }),
       });
       const data = await response.json();
       if (data.success) {
-        setMessage("Configuración actualizada.");
+        setMessage(
+          activeSession
+            ? "Configuración actualizada."
+            : "Sesión iniciada manualmente.",
+        );
         setActiveSession(data.session);
+        if (data.session.toleranceType) {
+          setToleranceMode(data.session.toleranceType);
+        }
+      } else {
+        setMessage(data.message || "Error al procesar solicitud.");
       }
     } catch (_error) {
       setMessage("Error al actualizar configuración.");
@@ -275,7 +288,7 @@ export default function TeacherPanel({
           </h1>
           <p className="text-gray-500 mt-1">
             Docente: {teacherData.name} | Curso: {group?.courseId || "N/A"} -{" "}
-            {group?.name || "N/A"} | Aula: {group?.classroom || "N/A"}
+            {group?.courseName || "N/A"} | Aula: {group?.classroom || "101"}
           </p>
           {message && (
             <p className="text-blue-600 font-semibold mt-2">{message}</p>

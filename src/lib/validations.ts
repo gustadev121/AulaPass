@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * Esquema de validación para CUI/DNI (RF-01, RF-03).
+ * Esquema de validación para CUI (RF-01, RF-03).
  * Debe contener exactamente 8 dígitos numéricos.
  */
 export const identifierSchema = z

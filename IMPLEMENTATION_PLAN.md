@@ -48,7 +48,7 @@ Este plan de implementación integra los roles del equipo original con la arquit
 **Objetivo:** Diseñar la documentación de calidad y las matrices detalladas de casos de prueba. Su trabajo define las reglas que debe validar el código desarrollado por el Integrante 4.
 
 - **Tarea 3.1: Matriz de Particiones de Equivalencia (PE) [RF-03, RF-04, RF-11]:**
-  * Identificar clases de equivalencia válidas e inválidas para los CUI/DNI de 8 dígitos.
+  * Identificar clases de equivalencia válidas e inválidas para los CUI de 8 dígitos.
   * Definir combinaciones de entrada (alumno matriculado en grupo, alumno de otra sección por flexibilidad, y alumno en hora hueco).
 - **Tarea 3.2: Matriz de Análisis de Valores Límite (AVL) [RF-07, RF-10, RF-13]:**
   * Diseñar la casuística de tiempos límite exactos (1 segundo antes, al límite, y 1 segundo después del límite de tolerancia estática/dinámica, inasistencia docente y cierre de bloque).

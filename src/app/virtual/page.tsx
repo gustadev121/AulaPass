@@ -58,7 +58,7 @@ export default function VirtualSwipePage() {
               htmlFor="cui-input"
               className="block text-sm font-medium text-gray-700 mb-1"
             >
-              CUI / DNI (8 dígitos)
+              CUI (8 dígitos)
             </label>
             <input
               id="cui-input"

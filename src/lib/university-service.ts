@@ -5,7 +5,8 @@ export interface ExternalStudent {
 }
 
 export interface ExternalTeacher {
-  code: string; // DNI o Código del docente
+  cui: string; // CUI del docente (8 dígitos)
+  code: string; // Código administrativo del docente (8 dígitos)
   name: string;
 }
 
@@ -49,8 +50,8 @@ const MOCK_STUDENTS: ExternalStudent[] = [
 ];
 
 const MOCK_TEACHERS: ExternalTeacher[] = [
-  { code: "10101010", name: "Dr. Alberto Cáceres" },
-  { code: "20202020", name: "Mg. Beatriz Llerena" },
+  { cui: "90000001", code: "10101010", name: "Dr. Alberto Cáceres" },
+  { cui: "90000002", code: "20202020", name: "Mg. Beatriz Llerena" },
 ];
 
 const MOCK_GROUPS: ExternalGroup[] = [
@@ -70,8 +71,8 @@ const MOCK_GROUPS: ExternalGroup[] = [
     courseName: "Ingeniería de Software II",
     teacherCode: "10101010",
     schedules: [
-      { dayOfWeek: 1, startTime: "08:50", endTime: "11:00" }, // Lunes
-      { dayOfWeek: 3, startTime: "08:50", endTime: "11:00" }, // Miércoles
+      { dayOfWeek: 1, startTime: "08:50", endTime: "11:30" }, // Lunes
+      { dayOfWeek: 3, startTime: "08:50", endTime: "11:30" }, // Miércoles
     ],
   },
   {
@@ -90,6 +91,26 @@ const MOCK_GROUPS: ExternalGroup[] = [
 // biome-ignore lint/complexity/noStaticOnlyClass: agrupamiento de servicios externos mockeados
 export class UniversityService {
   /**
+   * Helper para obtener las fechas de inicio y fin esperadas basadas en una hora actual y el horario.
+   */
+  static getDatesForSchedule(
+    currentTime: Date,
+    startTimeStr: string,
+    endTimeStr: string,
+  ) {
+    const [startH, startM] = startTimeStr.split(":").map(Number);
+    const [endH, endM] = endTimeStr.split(":").map(Number);
+
+    const expectedStart = new Date(currentTime);
+    expectedStart.setHours(startH, startM, 0, 0);
+
+    const expectedEnd = new Date(currentTime);
+    expectedEnd.setHours(endH, endM, 0, 0);
+
+    return { expectedStart, expectedEnd };
+  }
+
+  /**
    * Obtiene un alumno por su CUI
    */
   static async getStudentByCui(cui: string): Promise<ExternalStudent | null> {
@@ -98,7 +119,15 @@ export class UniversityService {
   }
 
   /**
-   * Obtiene un profesor por su CUI/DNI
+   * Obtiene un profesor por su CUI
+   */
+  static async getTeacherByCui(cui: string): Promise<ExternalTeacher | null> {
+    const teacher = MOCK_TEACHERS.find((t) => t.cui === cui.trim());
+    return teacher ? { ...teacher } : null;
+  }
+
+  /**
+   * Obtiene un profesor por su código administrativo
    */
   static async getTeacherByCode(code: string): Promise<ExternalTeacher | null> {
     const teacher = MOCK_TEACHERS.find((t) => t.code === code.trim());

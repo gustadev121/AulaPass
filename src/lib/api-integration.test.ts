@@ -6,6 +6,7 @@ import { attendances, auditLogs, sessions } from "@/db/schema";
 import { UniversityService } from "@/lib/university-service";
 import * as swipeRoute from "../app/api/kiosk/swipe/route";
 import * as correctAttendanceRoute from "../app/api/teacher/attendance/correct/route";
+import * as teacherLoginRoute from "../app/api/teacher/login/route";
 import * as checkAbsenceRoute from "../app/api/teacher/session/check-absence/route";
 import * as closeSessionRoute from "../app/api/teacher/session/close/route";
 import * as virtualSwipeRoute from "../app/api/virtual/swipe/route";
@@ -23,14 +24,53 @@ describe("API Integration Tests - Módulos 1, 2, 3, 4, 5, 6, 8", () => {
   });
 
   describe("Módulo 1: Acceso e Identificación (Panel Docente)", () => {
-    it("debe permitir el acceso del docente oficial asignado (TC-1.11, TC-3.01)", async () => {
+    it("debe permitir el acceso del docente con código válido (TC-1.11)", async () => {
+      await testApiHandler({
+        appHandler: teacherLoginRoute,
+        async test({ fetch }) {
+          const res = await fetch({
+            method: "POST",
+            body: JSON.stringify({
+              teacherCode: "10101010",
+            }),
+          });
+          const json = await res.json();
+
+          expect(res.status).toBe(200);
+          expect(json.success).toBe(true);
+          expect(json.role).toBe("TEACHER");
+        },
+      });
+    });
+
+    it("debe rechazar credenciales inválidas del docente (TC-1.12)", async () => {
+      await testApiHandler({
+        appHandler: teacherLoginRoute,
+        async test({ fetch }) {
+          const res = await fetch({
+            method: "POST",
+            body: JSON.stringify({
+              teacherCode: "00000000",
+            }),
+          });
+          const json = await res.json();
+
+          expect(res.status).toBe(401);
+          expect(json.success).toBe(false);
+        },
+      });
+    });
+  });
+
+  describe("Módulo 3: Control de Asistencia Docente (RF-06)", () => {
+    it("debe permitir el ingreso del docente oficial usando CUI (TC-3.01)", async () => {
       await testApiHandler({
         appHandler: swipeRoute,
         async test({ fetch }) {
           const res = await fetch({
             method: "POST",
             body: JSON.stringify({
-              DniCui: "10101010",
+              DniCui: "90000001",
               mockTime: "2026-05-25T12:05:00.000Z",
             }),
           });
@@ -50,26 +90,7 @@ describe("API Integration Tests - Módulos 1, 2, 3, 4, 5, 6, 8", () => {
           const res = await fetch({
             method: "POST",
             body: JSON.stringify({
-              DniCui: "11111111", // Docente ajeno
-              mockTime: "2026-05-25T12:05:00.000Z",
-            }),
-          });
-          const json = await res.json();
-
-          expect(res.status).toBe(400);
-          expect(json.success).toBe(false);
-        },
-      });
-    });
-
-    it("debe rechazar credenciales inválidas del docente (TC-1.12)", async () => {
-      await testApiHandler({
-        appHandler: swipeRoute,
-        async test({ fetch }) {
-          const res = await fetch({
-            method: "POST",
-            body: JSON.stringify({
-              DniCui: "00000000",
+              DniCui: "90000002", // Docente ajeno al bloque
               mockTime: "2026-05-25T12:05:00.000Z",
             }),
           });
@@ -122,6 +143,45 @@ describe("API Integration Tests - Módulos 1, 2, 3, 4, 5, 6, 8", () => {
             .limit(1);
           expect(att.length).toBe(1);
           expect(att[0].status).toBe("PUNTUAL");
+        },
+      });
+    });
+
+    it("debe usar tolerancia DINÁMICA si el docente llega tarde (Fix reported issue)", async () => {
+      // SW-II-B Lunes: 08:50 - 11:30. 15 min tolerance ends at 09:05.
+      // Docente (90000001) llega a las 09:10 local (14:10 UTC si es GMT-5)
+      const mockTimeTeacher = "2026-05-25T14:10:00.000Z";
+      const mockTimeStudent = "2026-05-25T14:11:00.000Z";
+
+      await testApiHandler({
+        appHandler: swipeRoute,
+        async test({ fetch }) {
+          // 1. Docente marca
+          const resT = await fetch({
+            method: "POST",
+            body: JSON.stringify({
+              DniCui: "90000001",
+              mockTime: mockTimeTeacher,
+            }),
+          });
+          expect(resT.status).toBe(200);
+
+          // Verificar que la sesión es DYNAMIC
+          const session = await db.select().from(sessions).limit(1).then(res => res[0]);
+          expect(session.toleranceType).toBe("DYNAMIC");
+
+          // 2. Alumno (20205678) marca
+          const resS = await fetch({
+            method: "POST",
+            body: JSON.stringify({
+              DniCui: "20205678",
+              mockTime: mockTimeStudent,
+            }),
+          });
+          const jsonS = await resS.json();
+          expect(resS.status).toBe(200);
+          // Antes de la mejora, esto resultaría en "FALTA" debido a la tolerancia STATIC (09:05)
+          expect(jsonS.status).toBe("TARDANZA"); 
         },
       });
     });
@@ -293,7 +353,7 @@ describe("API Integration Tests - Módulos 1, 2, 3, 4, 5, 6, 8", () => {
           const res = await fetch({
             method: "POST",
             body: JSON.stringify({
-              DniCui: "10101010", // Docente oficial
+              DniCui: "90000001", // Docente oficial (CUI)
               mockTime: "2026-05-25T12:20:00.000Z",
             }),
           });

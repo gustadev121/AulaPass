@@ -223,13 +223,13 @@ describe(
       await act(async () => {
         vi.advanceTimersByTime(10);
       });
-      expect(screen.getByText("Ingrese su CUI o DNI")).toBeInTheDocument();
+      expect(screen.getByText("Ingrese su CUI")).toBeInTheDocument();
 
       // 3.01s - Debe permanecer en estado base (TC-7.07)
       await act(async () => {
         vi.advanceTimersByTime(10);
       });
-      expect(screen.getByText("Ingrese su CUI o DNI")).toBeInTheDocument();
+      expect(screen.getByText("Ingrese su CUI")).toBeInTheDocument();
       expect(screen.queryByText("Exitoso")).not.toBeInTheDocument();
     });
 
