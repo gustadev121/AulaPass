@@ -1,0 +1,570 @@
+import { and, eq } from "drizzle-orm";
+import { type NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { db } from "@/db";
+import { attendances, sessions } from "@/db/schema";
+import { AttendanceRulesEngine } from "@/lib/attendance-rules";
+import {
+  type ExternalGroup,
+  UniversityService,
+} from "@/lib/university-service";
+
+// Esquema de validación del CUI/DNI (RF-01, RF-03)
+const swipeSchema = z.object({
+  DniCui: z
+    .string()
+    .transform((val) => val.trim())
+    .refine((val) => /^\d{8}$/.test(val), {
+      message: "El CUI/DNI debe contener exactamente 8 dígitos numéricos.",
+    }),
+  mockTime: z.string().optional(), // Inyección de tiempo para simulación/pruebas
+});
+
+function getDatesForSchedule(
+  currentTime: Date,
+  startTimeStr: string,
+  endTimeStr: string,
+) {
+  const year = currentTime.getFullYear();
+  const month = currentTime.getMonth();
+  const date = currentTime.getDate();
+
+  const [startH, startM] = startTimeStr.split(":").map(Number);
+  const [endH, endM] = endTimeStr.split(":").map(Number);
+
+  const expectedStart = new Date(year, month, date, startH, startM, 0, 0);
+  const expectedEnd = new Date(year, month, date, endH, endM, 0, 0);
+
+  return { expectedStart, expectedEnd };
+}
+
+export async function POST(request: NextRequest) {
+  const startTime = Date.now(); // Para control de tiempo de respuesta (RNF-02)
+
+  try {
+    const body = await request.json();
+    const parseResult = swipeSchema.safeParse(body);
+
+    if (!parseResult.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          color: "RED",
+          message: parseResult.error.message,
+        },
+        { status: 400 },
+      );
+    }
+
+    const { DniCui, mockTime } = parseResult.data;
+    const now = mockTime ? new Date(mockTime) : new Date();
+    const currentDay = now.getDay();
+    const mappedDay = currentDay === 0 ? 7 : currentDay; // JS 0 = Domingo a 7
+
+    const dateString = now.toISOString().split("T")[0]; // YYYY-MM-DD
+
+    // 1. Verificar si es Docente (RF-06)
+    const teacher = await UniversityService.getTeacherByCui(DniCui);
+    if (teacher) {
+      // Buscar si el docente tiene una clase programada en el aula en este bloque
+      const classroomSchedules = await UniversityService.getClassroomSchedule();
+      let matchedGroup = null;
+      let matchedSchedule = null;
+
+      for (const item of classroomSchedules) {
+        const group = await UniversityService.getGroupById(item.groupId);
+        if (
+          group &&
+          group.teacherCui === teacher.cui &&
+          item.schedule.dayOfWeek === mappedDay
+        ) {
+          const { expectedStart, expectedEnd } = getDatesForSchedule(
+            now,
+            item.schedule.startTime,
+            item.schedule.endTime,
+          );
+          const earliestStart = new Date(
+            expectedStart.getTime() - 30 * 60 * 1000,
+          );
+
+          if (now >= earliestStart && now <= expectedEnd) {
+            matchedGroup = group;
+            matchedSchedule = item.schedule;
+            break;
+          }
+        }
+      }
+
+      if (!matchedGroup || !matchedSchedule) {
+        return NextResponse.json(
+          {
+            success: false,
+            color: "RED",
+            message:
+              "No tiene sesiones de clase programadas para este horario.",
+          },
+          { status: 400 },
+        );
+      }
+
+      // Buscar si ya existe la sesión en BD local
+      const session = await db
+        .select()
+        .from(sessions)
+        .where(
+          and(
+            eq(sessions.groupId, matchedGroup.id),
+            eq(sessions.date, dateString),
+          ),
+        )
+        .limit(1)
+        .then((res) => res[0]);
+
+      if (session) {
+        if (session.teacherCheckIn) {
+          return NextResponse.json({
+            success: true,
+            color: "BLUE",
+            role: "TEACHER",
+            name: teacher.name,
+            message: `Bienvenido docente ${teacher.name}. Asistencia ya registrada previamente.`,
+          });
+        }
+
+        // Actualizar sesión que fue iniciada de forma automática por un alumno (RF-05)
+        const updatedTeacherCheckIn = now.toISOString();
+        let toleranceLimit = session.toleranceLimit;
+
+        // Si es dinámica, re-calculamos el límite a partir de la llegada del docente (RF-07)
+        if (session.toleranceType === "DYNAMIC") {
+          // Asumimos 15 minutos por defecto si no está especificado
+          toleranceLimit = new Date(
+            now.getTime() + 15 * 60 * 1000,
+          ).toISOString();
+        }
+
+        await db
+          .update(sessions)
+          .set({
+            teacherCheckIn: updatedTeacherCheckIn,
+            toleranceLimit: toleranceLimit,
+          })
+          .where(eq(sessions.id, session.id));
+      } else {
+        // Crear nueva sesión iniciada por el docente
+        const { expectedStart, expectedEnd } = getDatesForSchedule(
+          now,
+          matchedSchedule.startTime,
+          matchedSchedule.endTime,
+        );
+        const toleranceMinutes = 15; // 15 min de tolerancia por defecto
+        const toleranceLimit = new Date(
+          expectedStart.getTime() + toleranceMinutes * 60 * 1000,
+        ).toISOString();
+
+        await db.insert(sessions).values({
+          id: crypto.randomUUID(),
+          groupId: matchedGroup.id,
+          date: dateString,
+          expectedStart: expectedStart.toISOString(),
+          expectedEnd: expectedEnd.toISOString(),
+          teacherCheckIn: now.toISOString(),
+          status: "ACTIVE",
+          toleranceType: "STATIC",
+          toleranceLimit: toleranceLimit,
+        });
+      }
+
+      return NextResponse.json({
+        success: true,
+        color: "BLUE",
+        role: "TEACHER",
+        name: teacher.name,
+        message: `Asistencia del docente ${teacher.name} registrada con éxito. Clase iniciada.`,
+      });
+    }
+
+    // 2. Verificar si es Estudiante (RF-04)
+    const student = await UniversityService.getStudentByCui(DniCui);
+    if (student) {
+      // Buscar si existe una sesión de clase activa en la base de datos local
+      const activeSession = await db
+        .select()
+        .from(sessions)
+        .where(eq(sessions.status, "ACTIVE"))
+        .limit(1)
+        .then((res) => res[0]);
+
+      if (activeSession) {
+        // Obtener el grupo activo y todos los grupos del curso para tolerancia de grupo intergrupo (RF-04)
+        const activeGroup = await UniversityService.getGroupById(
+          activeSession.groupId,
+        );
+        if (!activeGroup) {
+          return NextResponse.json(
+            {
+              success: false,
+              color: "RED",
+              message: "Error al recuperar datos del grupo académico activo.",
+            },
+            { status: 500 },
+          );
+        }
+
+        // Obtener todos los horarios y grupos programados para el curso
+        // En nuestro mock de UNSA, podemos simular recuperar los grupos del mismo curso
+        // Filtramos MOCK_GROUPS indirectamente de forma simulada buscando grupos con el mismo courseId
+        // Para lograrlo, consultamos todos los grupos del aula y verificamos cuáles comparten el mismo courseId
+        const classroomSchedules =
+          await UniversityService.getClassroomSchedule();
+        const courseGroups = [];
+        for (const item of classroomSchedules) {
+          const g = await UniversityService.getGroupById(item.groupId);
+          if (g && g.courseId === activeGroup.courseId) {
+            courseGroups.push(g);
+          }
+        }
+
+        // Verificar si ya tiene marcación en esta sesión
+        const existingAttendance = await db
+          .select()
+          .from(attendances)
+          .where(
+            and(
+              eq(attendances.studentCui, student.cui),
+              eq(attendances.sessionId, activeSession.id),
+            ),
+          )
+          .limit(1)
+          .then((res) => res[0]);
+
+        if (existingAttendance) {
+          // Alternancia Entrada/Salida (RF-09)
+          if (existingAttendance.checkOut) {
+            // Si ya tiene salida, actualizamos el checkout al más reciente (robusto)
+            await db
+              .update(attendances)
+              .set({ checkOut: now.toISOString() })
+              .where(eq(attendances.id, existingAttendance.id));
+
+            return NextResponse.json({
+              success: true,
+              color: "BLUE",
+              role: "STUDENT",
+              name: student.name,
+              swipeType: "SALIDA",
+              status: "AMBIENTE_ESTUDIO",
+              message: `Salida de ${student.name} actualizada con éxito.`,
+            });
+          }
+
+          // Registrar salida
+          await db
+            .update(attendances)
+            .set({ checkOut: now.toISOString() })
+            .where(eq(attendances.id, existingAttendance.id));
+
+          return NextResponse.json({
+            success: true,
+            color: "BLUE",
+            role: "STUDENT",
+            name: student.name,
+            swipeType: "SALIDA",
+            status: "AMBIENTE_ESTUDIO",
+            message: `Hasta luego ${student.name}. Salida registrada con éxito.`,
+          });
+        }
+
+        // Es una Entrada, evaluar reglas de asistencia
+        // Formatear los horarios para el motor de reglas
+        const formattedSchedules = classroomSchedules.map((item) => {
+          const { expectedStart, expectedEnd } = getDatesForSchedule(
+            now,
+            item.schedule.startTime,
+            item.schedule.endTime,
+          );
+          return {
+            groupId: item.groupId,
+            startTime: expectedStart,
+            endTime: expectedEnd,
+          };
+        });
+
+        const activeSessionMapped = {
+          id: activeSession.id,
+          groupId: activeSession.groupId,
+          expectedStart: new Date(activeSession.expectedStart),
+          expectedEnd: new Date(activeSession.expectedEnd),
+          teacherCheckIn: activeSession.teacherCheckIn
+            ? new Date(activeSession.teacherCheckIn)
+            : null,
+          status: activeSession.status,
+          toleranceType: activeSession.toleranceType,
+          toleranceLimit: new Date(activeSession.toleranceLimit || ""),
+        };
+
+        const result = AttendanceRulesEngine.evaluateStudentSwipe(
+          {
+            currentTime: now,
+            student,
+            activeSession: activeSessionMapped,
+            currentCourseGroups: courseGroups,
+            classroomSchedules: formattedSchedules,
+          },
+          false,
+        );
+
+        if (!result.valid) {
+          return NextResponse.json(
+            {
+              success: false,
+              color: "RED",
+              message: result.message,
+            },
+            { status: 400 },
+          );
+        }
+
+        // Registrar asistencia en DB
+        await db.insert(attendances).values({
+          id: crypto.randomUUID(),
+          studentCui: student.cui,
+          sessionId: activeSession.id,
+          checkIn: now.toISOString(),
+          status: result.status,
+          checkOutType: "NORMAL",
+        });
+
+        // Mapear estado al color visual (RF-15)
+        let color: "VERDE" | "AMBAR" | "ROJO" | "BLUE" = "VERDE";
+        if (result.status === "TARDANZA") color = "AMBAR";
+        else if (result.status === "FALTA") color = "ROJO";
+        else if (result.status === "AMBIENTE_ESTUDIO") color = "BLUE";
+
+        return NextResponse.json({
+          success: true,
+          color,
+          role: "STUDENT",
+          name: student.name,
+          swipeType: "ENTRADA",
+          status: result.status,
+          message: `Ingreso registrado. Estado: ${result.status}. ${result.message}`,
+        });
+      }
+
+      // Si no hay sesión activa: buscar si existe clase programada para iniciar sesión de emergencia (RF-05)
+      const classroomSchedules = await UniversityService.getClassroomSchedule();
+      let matchedSchedule = null;
+      let matchedGroup = null;
+
+      for (const item of classroomSchedules) {
+        if (item.schedule.dayOfWeek === mappedDay) {
+          const { expectedStart, expectedEnd } = getDatesForSchedule(
+            now,
+            item.schedule.startTime,
+            item.schedule.endTime,
+          );
+          const earliestStart = new Date(
+            expectedStart.getTime() - 30 * 60 * 1000,
+          );
+
+          if (now >= earliestStart && now <= expectedEnd) {
+            // Verificar si el estudiante está matriculado en esta asignatura
+            const group = await UniversityService.getGroupById(item.groupId);
+            if (group) {
+              // Obtener todos los grupos de la misma asignatura
+              const courseGroups: ExternalGroup[] = [];
+              for (const scheduleItem of classroomSchedules) {
+                const g = await UniversityService.getGroupById(
+                  scheduleItem.groupId,
+                );
+                if (g && g.courseId === group.courseId) {
+                  courseGroups.push(g);
+                }
+              }
+
+              const isEnrolled = student.enrolledGroupIds.some((sgid) =>
+                courseGroups.some((cg) => cg.id === sgid),
+              );
+
+              if (isEnrolled) {
+                matchedSchedule = item.schedule;
+                matchedGroup = group;
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      if (matchedSchedule && matchedGroup) {
+        // [RF-05] Autogenerar sesión de emergencia
+        const { expectedStart, expectedEnd } = getDatesForSchedule(
+          now,
+          matchedSchedule.startTime,
+          matchedSchedule.endTime,
+        );
+        const toleranceMinutes = 15;
+        const toleranceLimit = new Date(
+          expectedStart.getTime() + toleranceMinutes * 60 * 1000,
+        ).toISOString();
+
+        const newSessionId = crypto.randomUUID();
+        await db.insert(sessions).values({
+          id: newSessionId,
+          groupId: matchedGroup.id,
+          date: dateString,
+          expectedStart: expectedStart.toISOString(),
+          expectedEnd: expectedEnd.toISOString(),
+          teacherCheckIn: null, // El docente no ha llegado
+          status: "ACTIVE",
+          toleranceType: "STATIC",
+          toleranceLimit: toleranceLimit,
+        });
+
+        // Registrar asistencia del estudiante
+        await db.insert(attendances).values({
+          id: crypto.randomUUID(),
+          studentCui: student.cui,
+          sessionId: newSessionId,
+          checkIn: now.toISOString(),
+          status: "PUNTUAL", // Al autogenerar la sesión de emergencia, el primer alumno es PUNTUAL
+          checkOutType: "NORMAL",
+        });
+
+        return NextResponse.json({
+          success: true,
+          color: "VERDE",
+          role: "STUDENT",
+          name: student.name,
+          swipeType: "ENTRADA",
+          status: "PUNTUAL",
+          message: `Sesión de emergencia iniciada automáticamente. Asistencia de ${student.name} registrada como PUNTUAL.`,
+        });
+      }
+
+      // [RF-11] Hora Hueco: No hay clases programadas en este momento
+      // Crear o buscar sesión de Hora Hueco
+      let huecoSession = await db
+        .select()
+        .from(sessions)
+        .where(
+          and(
+            eq(sessions.groupId, "HORA_HUECO"),
+            eq(sessions.date, dateString),
+            eq(sessions.status, "ACTIVE"),
+          ),
+        )
+        .limit(1)
+        .then((res) => res[0]);
+
+      if (!huecoSession) {
+        const huecoId = crypto.randomUUID();
+        const expectedEnd = new Date(now.getTime() + 2 * 60 * 60 * 1000); // Bloque de 2 horas por defecto
+        await db.insert(sessions).values({
+          id: huecoId,
+          groupId: "HORA_HUECO",
+          date: dateString,
+          expectedStart: now.toISOString(),
+          expectedEnd: expectedEnd.toISOString(),
+          teacherCheckIn: null,
+          status: "ACTIVE",
+          toleranceType: "STATIC",
+          toleranceLimit: now.toISOString(),
+        });
+
+        huecoSession = {
+          id: huecoId,
+          groupId: "HORA_HUECO",
+          date: dateString,
+          expectedStart: now.toISOString(),
+          expectedEnd: expectedEnd.toISOString(),
+          teacherCheckIn: null,
+          status: "ACTIVE",
+          toleranceType: "STATIC",
+          toleranceLimit: now.toISOString(),
+          virtualCode: null,
+        };
+      }
+
+      // Verificar si ya tiene marcación en la sesión de hora hueco
+      const existingHuecoAttendance = await db
+        .select()
+        .from(attendances)
+        .where(
+          and(
+            eq(attendances.studentCui, student.cui),
+            eq(attendances.sessionId, huecoSession.id),
+          ),
+        )
+        .limit(1)
+        .then((res) => res[0]);
+
+      if (existingHuecoAttendance) {
+        // Trazar salida
+        await db
+          .update(attendances)
+          .set({ checkOut: now.toISOString() })
+          .where(eq(attendances.id, existingHuecoAttendance.id));
+
+        return NextResponse.json({
+          success: true,
+          color: "BLUE",
+          role: "STUDENT",
+          name: student.name,
+          swipeType: "SALIDA",
+          status: "AMBIENTE_ESTUDIO",
+          message: `Salida de ambiente de estudio registrada para ${student.name}.`,
+        });
+      }
+
+      // Registrar ingreso de Hora Hueco
+      await db.insert(attendances).values({
+        id: crypto.randomUUID(),
+        studentCui: student.cui,
+        sessionId: huecoSession.id,
+        checkIn: now.toISOString(),
+        status: "AMBIENTE_ESTUDIO",
+        checkOutType: "NORMAL",
+      });
+
+      return NextResponse.json({
+        success: true,
+        color: "BLUE",
+        role: "STUDENT",
+        name: student.name,
+        swipeType: "ENTRADA",
+        status: "AMBIENTE_ESTUDIO",
+        message: `Ingreso registrado para Ambiente de Estudio (Hora Hueco) de ${student.name}.`,
+      });
+    }
+
+    // 3. Usuario no encontrado
+    return NextResponse.json(
+      {
+        success: false,
+        color: "RED",
+        message: "Identificador no registrado en el sistema universitario.",
+      },
+      { status: 400 },
+    );
+  } catch (error) {
+    // RNF-01: Robustez ante fallos
+    return NextResponse.json(
+      {
+        success: false,
+        color: "RED",
+        message: `Error interno de procesamiento: ${error instanceof Error ? error.message : "Desconocido"}`,
+      },
+      { status: 500 },
+    );
+  } finally {
+    const duration = Date.now() - startTime;
+    // RNF-02: Garantía de velocidad
+    if (duration > 150) {
+      console.warn(
+        `[WARNING] Kiosk swipe processing took too long: ${duration}ms`,
+      );
+    }
+  }
+}

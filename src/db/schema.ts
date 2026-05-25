@@ -33,6 +33,7 @@ export const attendances = sqliteTable("attendances", {
   })
     .notNull()
     .default("NORMAL"),
+  observation: text("observation"), // Justificación u observación (p.ej. "Clase Suspendida / Inasistencia Docente")
 });
 
 export const auditLogs = sqliteTable("audit_logs", {
