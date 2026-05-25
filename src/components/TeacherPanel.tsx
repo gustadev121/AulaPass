@@ -21,7 +21,13 @@ interface Session {
   teacherCheckIn?: string | null;
   status: "ACTIVE" | "CLOSED" | "SUSPENDED";
   toleranceType: "STATIC" | "DYNAMIC";
+  toleranceMinutes: string;
   toleranceLimit?: string | null;
+}
+
+interface GroupConfig {
+  toleranceType: "STATIC" | "DYNAMIC";
+  toleranceMinutes: string;
 }
 
 interface Group {
@@ -88,6 +94,10 @@ export default function TeacherPanel({
 
         if (data.session) {
           setToleranceMode(data.session.toleranceType);
+          setToleranceMinutes(Number.parseInt(data.session.toleranceMinutes));
+        } else if (data.config) {
+          setToleranceMode(data.config.toleranceType);
+          setToleranceMinutes(Number.parseInt(data.config.toleranceMinutes));
         }
       } catch (_error) {
         setMessage("Error al cargar datos del panel.");

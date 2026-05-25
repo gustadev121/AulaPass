@@ -336,6 +336,78 @@ describe("API Integration Tests - Módulos 1, 2, 3, 4, 6, 8", () => {
       });
     });
 
+    // TC-3.08: Cierre automático por expiración de tiempo (RF-10, RF-13)
+    it("debe cerrar la sesión y marcar faltas automáticamente cuando el tiempo expira (TC-3.08)", async () => {
+      const sessionId = crypto.randomUUID();
+      const expectedEnd = "2026-05-25T08:40:00.000Z";
+      
+      await db.insert(sessions).values({
+        id: sessionId,
+        groupId: "SW-II-A", // Grupo con 3 alumnos en mock (1, 2, 3)
+        date: "2026-05-25",
+        expectedStart: "2026-05-25T07:00:00.000Z",
+        expectedEnd: expectedEnd,
+        status: "ACTIVE",
+        toleranceType: "STATIC",
+        toleranceLimit: "2026-05-25T07:15:00.000Z",
+      });
+
+      // Registrar un alumno puntual
+      await db.insert(attendances).values({
+        id: crypto.randomUUID(),
+        studentCui: "20201234",
+        sessionId,
+        checkIn: "2026-05-25T07:05:00.000Z",
+        status: "PUNTUAL",
+      });
+
+      await testApiHandler({
+        appHandler: checkAbsenceRoute,
+        async test({ fetch }) {
+          const res = await fetch({
+            method: "POST",
+            body: JSON.stringify({
+              sessionId,
+              mockTime: "2026-05-25T08:41:00.000Z", // 1 min después de la hora de fin
+            }),
+          });
+          const json = await res.json();
+
+          expect(json.closed).toBe(true);
+          expect(json.absentCount).toBeGreaterThan(0);
+
+          // Verificar sesión cerrada
+          const sess = await db
+            .select()
+            .from(sessions)
+            .where(eq(sessions.id, sessionId))
+            .limit(1)
+            .then(r => r[0]);
+          expect(sess.status).toBe("CLOSED");
+
+          // Verificar que el alumno 1 tiene salida forzada (RF-13)
+          const att1 = await db
+            .select()
+            .from(attendances)
+            .where(and(eq(attendances.sessionId, sessionId), eq(attendances.studentCui, "20201234")))
+            .limit(1)
+            .then(r => r[0]);
+          expect(att1.checkOut).toBe(expectedEnd);
+          expect(att1.checkOutType).toBe("FORCED_BY_SESSION_CLOSE");
+
+          // Verificar que los alumnos 2 y 3 tienen FALTA (RF-10)
+          const absences = await db
+            .select()
+            .from(attendances)
+            .where(and(eq(attendances.sessionId, sessionId), eq(attendances.status, "FALTA")));
+          
+          const absentCuis = absences.map(a => a.studentCui);
+          expect(absentCuis).toContain("20210001");
+          expect(absentCuis).toContain("20210002");
+        },
+      });
+    });
+
     // TC-3.07: Llegada de docente tras límite de suspensión
     it("debe rechazar marcación del docente si la sesión ya fue suspendida (TC-3.07)", async () => {
       const sessionId = crypto.randomUUID();

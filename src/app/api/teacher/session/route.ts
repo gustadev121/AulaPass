@@ -1,7 +1,7 @@
 import { and, eq, ne } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { attendances, auditLogs, sessions } from "@/db/schema";
+import { attendances, auditLogs, groupConfigs, sessions } from "@/db/schema";
 import { UniversityService } from "@/lib/university-service";
 
 export async function GET(request: NextRequest) {
@@ -88,14 +88,21 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 3. Obtener todas las sesiones del grupo seleccionado
+    // 3. Obtener configuración del grupo
+    const groupConfig = await db
+      .select()
+      .from(groupConfigs)
+      .where(eq(groupConfigs.groupId, selectedGroup.id))
+      .then((res) => res[0]);
+
+    // 4. Obtener todas las sesiones del grupo seleccionado
     const groupSessions = await db
       .select()
       .from(sessions)
       .where(eq(sessions.groupId, selectedGroup.id))
       .orderBy(sessions.date, sessions.expectedStart);
 
-    // 4. Determinar la sesión seleccionada
+    // 5. Determinar la sesión seleccionada
     let activeSession = null;
     if (requestedSessionId) {
       activeSession =
@@ -148,6 +155,10 @@ export async function GET(request: NextRequest) {
       session: activeSession,
       group: selectedGroup,
       groups: teacherGroups,
+      config: groupConfig || {
+        toleranceType: "STATIC",
+        toleranceMinutes: "15",
+      },
       sessions: groupSessions,
       attendances: attendancesWithNames,
       auditLogs: sessionAuditLogs,
@@ -172,6 +183,21 @@ export async function POST(request: NextRequest) {
     const now = date ? new Date(date) : new Date();
     const dateString = now.toISOString().split("T")[0];
 
+    // Persistir configuración del grupo para futuras sesiones
+    if (groupId && toleranceType && toleranceMinutes !== undefined) {
+      await db
+        .insert(groupConfigs)
+        .values({
+          groupId,
+          toleranceType,
+          toleranceMinutes: String(toleranceMinutes),
+        })
+        .onConflictDoUpdate({
+          target: groupConfigs.groupId,
+          set: { toleranceType, toleranceMinutes: String(toleranceMinutes) },
+        });
+    }
+
     // Buscar si ya existe una sesión activa (excluyendo Hora Hueco)
     const activeSession = await db
       .select()
@@ -187,19 +213,22 @@ export async function POST(request: NextRequest) {
       // Actualizar sesión activa existente
       // Re-calcular límite de tolerancia si cambia el tipo/minutos
       let toleranceLimit = activeSession.toleranceLimit;
-      if (toleranceType && toleranceMinutes !== undefined) {
-        if (toleranceType === "STATIC") {
+      const tMinutes = toleranceMinutes !== undefined ? toleranceMinutes : Number.parseInt(activeSession.toleranceMinutes);
+      const tType = toleranceType || activeSession.toleranceType;
+
+      if (toleranceType || toleranceMinutes !== undefined) {
+        if (tType === "STATIC") {
           toleranceLimit = new Date(
             new Date(activeSession.expectedStart).getTime() +
-              toleranceMinutes * 60 * 1000,
+              tMinutes * 60 * 1000,
           ).toISOString();
         } else if (
-          toleranceType === "DYNAMIC" &&
+          tType === "DYNAMIC" &&
           activeSession.teacherCheckIn
         ) {
           toleranceLimit = new Date(
             new Date(activeSession.teacherCheckIn).getTime() +
-              toleranceMinutes * 60 * 1000,
+              tMinutes * 60 * 1000,
           ).toISOString();
         }
       }
@@ -207,7 +236,8 @@ export async function POST(request: NextRequest) {
       await db
         .update(sessions)
         .set({
-          toleranceType: toleranceType || activeSession.toleranceType,
+          toleranceType: tType,
+          toleranceMinutes: String(tMinutes),
           toleranceLimit: toleranceLimit,
         })
         .where(eq(sessions.id, activeSession.id));
@@ -281,6 +311,7 @@ export async function POST(request: NextRequest) {
       teacherCheckIn,
       status: "ACTIVE" as const,
       toleranceType: tType,
+      toleranceMinutes: String(tMinutes),
       toleranceLimit,
     };
 
@@ -301,3 +332,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

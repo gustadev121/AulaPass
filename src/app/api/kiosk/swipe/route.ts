@@ -2,8 +2,9 @@ import { and, eq, isNull, ne } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
-import { attendances, sessions } from "@/db/schema";
+import { attendances, groupConfigs, sessions } from "@/db/schema";
 import { AttendanceRulesEngine } from "@/lib/attendance-rules";
+import { SessionService } from "@/lib/session-service";
 import {
   type ExternalGroup,
   UniversityService,
@@ -130,12 +131,13 @@ export async function POST(request: NextRequest) {
         const updatedTeacherCheckIn = now.toISOString();
         let toleranceLimit = session.toleranceLimit;
         let toleranceType = session.toleranceType;
+        const toleranceMinutes = Number.parseInt(session.toleranceMinutes);
 
         // [MEJORA] Si el docente llega tarde y la sesión era estática, cambiamos a dinámica
         // para no perjudicar a los alumnos que vienen con él.
         const expectedStart = new Date(session.expectedStart);
         const isLateTeacher =
-          now.getTime() > expectedStart.getTime() + 15 * 60 * 1000;
+          now.getTime() > expectedStart.getTime() + toleranceMinutes * 60 * 1000;
 
         if (isLateTeacher && toleranceType === "STATIC") {
           toleranceType = "DYNAMIC";
@@ -143,9 +145,8 @@ export async function POST(request: NextRequest) {
 
         // Si es dinámica, re-calculamos el límite a partir de la llegada del docente (RF-07)
         if (toleranceType === "DYNAMIC") {
-          // Asumimos 15 minutos por defecto si no está especificado
           toleranceLimit = new Date(
-            now.getTime() + 15 * 60 * 1000,
+            now.getTime() + toleranceMinutes * 60 * 1000,
           ).toISOString();
         }
 
@@ -165,15 +166,24 @@ export async function POST(request: NextRequest) {
             matchedSchedule.startTime,
             matchedSchedule.endTime,
           );
-        const toleranceMinutes = 15; // 15 min de tolerancia por defecto
+
+        // Buscar configuración persistida del grupo
+        const groupConfig = await db
+          .select()
+          .from(groupConfigs)
+          .where(eq(groupConfigs.groupId, matchedGroup.id))
+          .then((res) => res[0]);
+
+        const toleranceMinutes = groupConfig ? Number.parseInt(groupConfig.toleranceMinutes) : 15;
+        const baseToleranceType = groupConfig ? groupConfig.toleranceType : "STATIC";
 
         // [MEJORA] Si el docente llega tarde, iniciamos con tolerancia dinámica
         const isLateTeacher =
           now.getTime() >
           expectedStart.getTime() + toleranceMinutes * 60 * 1000;
-        const tType = isLateTeacher ? "DYNAMIC" : "STATIC";
+        const tType = isLateTeacher ? "DYNAMIC" : baseToleranceType;
         const tLimit = new Date(
-          (isLateTeacher ? now : expectedStart).getTime() +
+          (tType === "DYNAMIC" ? now : expectedStart).getTime() +
             toleranceMinutes * 60 * 1000,
         ).toISOString();
 
@@ -186,6 +196,7 @@ export async function POST(request: NextRequest) {
           teacherCheckIn: now.toISOString(),
           status: "ACTIVE",
           toleranceType: tType,
+          toleranceMinutes: String(toleranceMinutes),
           toleranceLimit: tLimit,
         });
       }
@@ -235,65 +246,11 @@ export async function POST(request: NextRequest) {
         activeSession &&
         now.getTime() > new Date(activeSession.expectedEnd).getTime()
       ) {
-        // [RF-13] Cierre automático forzado en el siguiente swipe si la sesión expiró
-        await db
-          .update(sessions)
-          .set({ status: "CLOSED" })
-          .where(eq(sessions.id, activeSession.id));
-
-        const allAttendances = await db
-          .select()
-          .from(attendances)
-          .where(eq(attendances.sessionId, activeSession.id));
-
-        const openAttendances = allAttendances.filter(
-          (att) => att.checkOut === null,
+        // [RF-13, RF-10] Cierre automático forzado en el siguiente swipe si la sesión expiró
+        await SessionService.closeSession(
+          activeSession.id,
+          "Cierre Automático por Expiración",
         );
-
-        const expectedEndTime = new Date(activeSession.expectedEnd);
-        const forcedAttendances = AttendanceRulesEngine.applyAutomaticCheckOuts(
-          openAttendances.map((att) => ({
-            id: att.id,
-            checkOut: att.checkOut,
-            checkOutType: att.checkOutType as any,
-            status: att.status as any,
-          })),
-          expectedEndTime,
-        );
-
-        for (const forced of forcedAttendances) {
-          if (forced.checkOut) {
-            await db
-              .update(attendances)
-              .set({
-                checkOut: forced.checkOut,
-                checkOutType: "FORCED_BY_SESSION_CLOSE",
-              })
-              .where(eq(attendances.id, forced.id));
-          }
-        }
-
-        // [RF-10] Marcado automático de inasistencias en el cierre automático
-        const enrolledStudents = await UniversityService.getStudentsByGroup(
-          activeSession.groupId,
-        );
-        const absentStudentCuis = AttendanceRulesEngine.applyAutomaticAbsences(
-          enrolledStudents,
-          allAttendances,
-        );
-
-        for (const cui of absentStudentCuis) {
-          await db.insert(attendances).values({
-            id: crypto.randomUUID(),
-            studentCui: cui,
-            sessionId: activeSession.id,
-            checkIn: activeSession.expectedStart,
-            checkOut: activeSession.expectedEnd,
-            status: "FALTA",
-            observation: "Inasistencia automática (Cierre Automático por Expiración)",
-          });
-        }
-
         activeSession = undefined;
       }
 
@@ -501,7 +458,17 @@ export async function POST(request: NextRequest) {
             matchedSchedule.startTime,
             matchedSchedule.endTime,
           );
-        const toleranceMinutes = 15;
+
+        // Buscar configuración persistida del grupo
+        const groupConfig = await db
+          .select()
+          .from(groupConfigs)
+          .where(eq(groupConfigs.groupId, matchedGroup.id))
+          .then((res) => res[0]);
+
+        const toleranceMinutes = groupConfig ? Number.parseInt(groupConfig.toleranceMinutes) : 15;
+        const toleranceType = groupConfig ? groupConfig.toleranceType : "STATIC";
+
         const toleranceLimit = new Date(
           expectedStart.getTime() + toleranceMinutes * 60 * 1000,
         ).toISOString();
@@ -515,7 +482,8 @@ export async function POST(request: NextRequest) {
           expectedEnd: expectedEnd.toISOString(),
           teacherCheckIn: null, // El docente no ha llegado
           status: "ACTIVE",
-          toleranceType: "STATIC",
+          toleranceType: toleranceType,
+          toleranceMinutes: String(toleranceMinutes),
           toleranceLimit: toleranceLimit,
         });
 

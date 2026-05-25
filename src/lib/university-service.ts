@@ -71,8 +71,8 @@ const MOCK_GROUPS: ExternalGroup[] = [
     courseName: "Ingeniería de Software II",
     teacherCode: "10101010",
     schedules: [
-      { dayOfWeek: 1, startTime: "08:50", endTime: "11:30" }, // Lunes
-      { dayOfWeek: 3, startTime: "08:50", endTime: "11:30" }, // Miércoles
+      { dayOfWeek: 1, startTime: "08:50", endTime: "10:30" }, // Lunes
+      { dayOfWeek: 3, startTime: "08:50", endTime: "10:30" }, // Miércoles
     ],
   },
   {
@@ -146,9 +146,9 @@ export class UniversityService {
    * Obtiene todos los alumnos matriculados en un grupo
    */
   static async getStudentsByGroup(groupId: string): Promise<ExternalStudent[]> {
-    return MOCK_STUDENTS.filter((s) => s.enrolledGroupIds.includes(groupId)).map(
-      (s) => ({ ...s }),
-    );
+    return MOCK_STUDENTS.filter((s) =>
+      s.enrolledGroupIds.includes(groupId),
+    ).map((s) => ({ ...s }));
   }
 
   /**

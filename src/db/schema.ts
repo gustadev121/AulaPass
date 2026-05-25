@@ -13,7 +13,16 @@ export const sessions = sqliteTable("sessions", {
   toleranceType: text("tolerance_type", { enum: ["STATIC", "DYNAMIC"] })
     .notNull()
     .default("STATIC"),
+  toleranceMinutes: text("tolerance_minutes").notNull().default("15"),
   toleranceLimit: text("tolerance_limit"), // ISO String
+});
+
+export const groupConfigs = sqliteTable("group_configs", {
+  groupId: text("group_id").primaryKey(),
+  toleranceType: text("tolerance_type", { enum: ["STATIC", "DYNAMIC"] })
+    .notNull()
+    .default("STATIC"),
+  toleranceMinutes: text("tolerance_minutes").notNull().default("15"),
 });
 
 export const attendances = sqliteTable("attendances", {
