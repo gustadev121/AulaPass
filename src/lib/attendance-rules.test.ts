@@ -130,7 +130,10 @@ describe("AttendanceRulesEngine - Pruebas Iniciales de Caja Negra", () => {
     // AVL Exacto: Justo en el límite de tolerancia
     it("debe ser PUNTUAL exactamente en el límite de tolerancia", () => {
       const result = AttendanceRulesEngine.evaluateStudentSwipe(
-        { ...baseInput, currentTime: new Date("2026-05-24T07:15:00Z") },
+        { 
+          ...baseInput, 
+          currentTime: new Date("2026-05-24T07:15:00Z") 
+        },
         false
       );
       expect(result.status).toBe("PUNTUAL");

@@ -94,7 +94,13 @@ export class AttendanceRulesEngine {
     hasCheckedIn: boolean,
   ): AttendanceRuleResult {
     // Robustez: Validación de entradas básicas [RNF-01]
-    if (!input || !input.student || !input.currentTime) {
+    if (
+      !input || 
+      !input.student || 
+      !input.currentTime || 
+      !input.currentCourseGroups || 
+      !input.classroomSchedules
+    ) {
       return {
         valid: false,
         swipeType: "ENTRADA",
