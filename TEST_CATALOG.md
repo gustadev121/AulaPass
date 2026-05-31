@@ -46,7 +46,6 @@
 | P_Conf_Dur_04 | 5s - 30s (Válido Alto -1) | 30 | 29 | Frontera - 1 | Configuración aceptada |
 | P_Conf_Dur_05 | 5s - 30s (Válido Alto) | 30 | 30 | Frontera | Configuración aceptada |
 | P_Conf_Dur_06 | > 30s (Inválida) | 30 | 31 | Frontera + 1 | Error de validación |
-| P_Doc_Gen_01 | Acción "Generar" Válida | N/A | Clic "Generar" | Clase Equivalencia | Código en pantalla |
 | **ESTUDIANTE** |  |  |  |  |  |
 | P_EstLog_01 | CUI registrado (Válida) | N/A | "12345678" | Clase Equivalencia | Ingreso exitoso |
 | P_EstLog_02 | CUI no registrado (Inválida) | N/A | "00000000" | Clase Equivalencia | Acceso denegado |
