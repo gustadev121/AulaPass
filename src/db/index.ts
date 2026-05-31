@@ -1,14 +1,16 @@
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
+import { drizzle } from "drizzle-orm/node-postgres";
+import postgres from "postgres";
 import * as schema from "./schema";
 
-const globalForDb = globalThis as unknown as {
-  conn: Database.Database | undefined;
-};
+const sql = postgres({
+  host: process.env.DB_HOST || "localhost",
+  port: parseInt(process.env.DB_PORT || "5432", 10),
+  user: process.env.DB_USER || "postgres",
+  password: process.env.DB_PASSWORD || "postgres",
+  database: process.env.DB_NAME || "aulapass",
+});
 
-if (!globalForDb.conn) {
-  globalForDb.conn = new Database("sqlite.db");
-}
-
-export const conn = globalForDb.conn;
-export const db = drizzle(conn, { schema });
+/**
+ * Drizzle database instance initialized with the connection pool and schema.
+ */
+export const db = drizzle(sql, { schema });
