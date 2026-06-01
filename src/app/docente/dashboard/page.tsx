@@ -197,7 +197,7 @@ export default function TeacherDashboardPage() {
               />
             </div>
 
-            <Button type="submit" color="success" disabled={loading}>
+            <Button type="submit" disabled={loading}>
               {loading ? "Generando..." : "Generar Código"}
             </Button>
           </form>

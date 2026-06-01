@@ -134,7 +134,7 @@ export default function StudentRegistrationPage() {
                 disabled={loading}
               />
             </div>
-            <Button type="submit" color="info" disabled={loading}>
+            <Button type="submit" disabled={loading}>
               {loading ? "Verificando..." : "Buscar Código"}
             </Button>
           </form>
@@ -169,7 +169,6 @@ export default function StudentRegistrationPage() {
                 {loading ? "Registrar Asistencia" : "Registrando..."}
               </Button>
               <Button
-                color="gray"
                 onClick={() => setActiveCodeDetails(null)}
                 disabled={loading}
               >

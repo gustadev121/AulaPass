@@ -76,7 +76,7 @@ export default function TeacherLoginPage() {
 
           {error && <Alert color="failure">{error}</Alert>}
 
-          <Button disabled={loading}>
+          <Button type="submit" disabled={loading}>
             {loading ? "Validando..." : "Ingresar"}
           </Button>
         </form>
