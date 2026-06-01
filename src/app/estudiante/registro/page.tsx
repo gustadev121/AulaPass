@@ -161,14 +161,14 @@ export default function StudentRegistrationPage() {
 
             <div className="flex gap-2">
               <Button
-                color="success"
                 className="flex-1"
                 onClick={handleRegister}
                 disabled={loading}
               >
-                {loading ? "Registrar Asistencia" : "Registrando..."}
+                {loading ? "Registrando" : "Registrar asistencia"}
               </Button>
               <Button
+                color="alternative"
                 onClick={() => setActiveCodeDetails(null)}
                 disabled={loading}
               >
