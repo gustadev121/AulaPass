@@ -1,6 +1,18 @@
 "use client";
 
-import { Alert, Button, Card, Label, Table } from "flowbite-react";
+import {
+  Alert,
+  Button,
+  Card,
+  FileInput,
+  Label,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeadCell,
+  TableRow,
+} from "flowbite-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/app/AuthContext";
@@ -25,7 +37,6 @@ function parseCSV(text: string): Record<string, string>[] {
     .filter(Boolean);
   if (lines.length === 0) return [];
 
-  // Clean headers (remove BOM if present)
   const headers = lines[0]
     .split(",")
     .map((h) => h.trim().replace(/^\uFEFF/, ""));
@@ -234,7 +245,7 @@ export default function AdminDashboardPage() {
         <h1 className="text-xl font-bold">Administración AulaPass</h1>
         <Button
           size="sm"
-          color="failure"
+          color="red"
           onClick={() => {
             logout();
             router.push("/");
@@ -244,56 +255,40 @@ export default function AdminDashboardPage() {
         </Button>
       </header>
 
-      <main className="flex-grow p-6 max-w-6xl w-full mx-auto space-y-6">
+      <main className="grow p-6 max-w-6xl w-full mx-auto space-y-6">
         {success && <Alert color="success">{success}</Alert>}
         {error && <Alert color="failure">{error}</Alert>}
 
         {/* Tab Navigation */}
         <div className="flex border-b border-gray-200">
-          <button
-            type="button"
+          <Button
             onClick={() => setActiveTab("courses")}
-            className={`py-3 px-6 font-semibold border-b-2 transition-all ${
-              activeTab === "courses"
-                ? "border-blue-600 text-blue-600"
-                : "border-transparent text-gray-500 hover:text-gray-700"
-            }`}
+            color={activeTab === "courses" ? "blue" : "alternative"}
+            className="border-0 focus:ring-0"
           >
             Cursos
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
             onClick={() => setActiveTab("teachers")}
-            className={`py-3 px-6 font-semibold border-b-2 transition-all ${
-              activeTab === "teachers"
-                ? "border-blue-600 text-blue-600"
-                : "border-transparent text-gray-500 hover:text-gray-700"
-            }`}
+            color={activeTab === "teachers" ? "blue" : "alternative"}
+            className="border-0 focus:ring-0"
           >
             Docentes
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
             onClick={() => setActiveTab("students")}
-            className={`py-3 px-6 font-semibold border-b-2 transition-all ${
-              activeTab === "students"
-                ? "border-blue-600 text-blue-600"
-                : "border-transparent text-gray-500 hover:text-gray-700"
-            }`}
+            color={activeTab === "students" ? "blue" : "alternative"}
+            className="border-0 focus:ring-0"
           >
             Estudiantes
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
             onClick={() => setActiveTab("audit")}
-            className={`py-3 px-6 font-semibold border-b-2 transition-all ${
-              activeTab === "audit"
-                ? "border-blue-600 text-blue-600"
-                : "border-transparent text-gray-500 hover:text-gray-700"
-            }`}
+            color={activeTab === "audit" ? "blue" : "alternative"}
+            className="border-0 focus:ring-0"
           >
             Auditoría
-          </button>
+          </Button>
         </div>
 
         {/* Dynamic Section Content */}
@@ -316,14 +311,11 @@ export default function AdminDashboardPage() {
 
             {activeTab !== "audit" && (
               <div className="flex flex-col gap-1 w-full sm:w-auto">
-                <Label
-                  htmlFor="csv-file"
-                  value="Subir Archivo CSV"
-                  className="sr-only"
-                />
-                <input
+                <Label htmlFor="csv-file" className="sr-only">
+                  Subir Archivo CSV
+                </Label>
+                <FileInput
                   id="csv-file"
-                  type="file"
                   accept=".csv"
                   className="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 focus:outline-none"
                   onChange={(e) => handleCSVUpload(e, activeTab)}
@@ -337,131 +329,139 @@ export default function AdminDashboardPage() {
           <div className="overflow-x-auto">
             {activeTab === "courses" && (
               <Table hoverable>
-                <Table.Head>
-                  <Table.HeadCell>Código</Table.HeadCell>
-                  <Table.HeadCell>Nombre del Curso</Table.HeadCell>
-                  <Table.HeadCell>Abreviatura</Table.HeadCell>
-                  <Table.HeadCell>Grupos</Table.HeadCell>
-                </Table.Head>
-                <Table.Body className="divide-y">
+                <TableHead>
+                  <TableRow>
+                    <TableHeadCell>Código</TableHeadCell>
+                    <TableHeadCell>Nombre del Curso</TableHeadCell>
+                    <TableHeadCell>Abreviatura</TableHeadCell>
+                    <TableHeadCell>Grupos</TableHeadCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody className="divide-y">
                   {courses.length === 0 ? (
-                    <Table.Row>
-                      <Table.Cell colSpan={4} className="text-center py-4">
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center py-4">
                         No hay cursos registrados.
-                      </Table.Cell>
-                    </Table.Row>
+                      </TableCell>
+                    </TableRow>
                   ) : (
                     courses.map((course) => (
-                      <Table.Row key={course.code} className="bg-white">
-                        <Table.Cell className="font-mono">
+                      <TableRow key={course.code} className="bg-white">
+                        <TableCell className="font-mono">
                           {course.code}
-                        </Table.Cell>
-                        <Table.Cell className="font-medium text-gray-900">
+                        </TableCell>
+                        <TableCell className="font-medium text-gray-900">
                           {course.name}
-                        </Table.Cell>
-                        <Table.Cell>{course.abbreviation}</Table.Cell>
-                        <Table.Cell>{course.groups}</Table.Cell>
-                      </Table.Row>
+                        </TableCell>
+                        <TableCell>{course.abbreviation}</TableCell>
+                        <TableCell>{course.groups}</TableCell>
+                      </TableRow>
                     ))
                   )}
-                </Table.Body>
+                </TableBody>
               </Table>
             )}
 
             {activeTab === "teachers" && (
               <Table hoverable>
-                <Table.Head>
-                  <Table.HeadCell>Usuario</Table.HeadCell>
-                  <Table.HeadCell>Nombre Completo</Table.HeadCell>
-                  <Table.HeadCell>Código de Curso</Table.HeadCell>
-                </Table.Head>
-                <Table.Body className="divide-y">
+                <TableHead>
+                  <TableRow>
+                    <TableHeadCell>Usuario</TableHeadCell>
+                    <TableHeadCell>Nombre Completo</TableHeadCell>
+                    <TableHeadCell>Código de Curso</TableHeadCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody className="divide-y">
                   {teachers.length === 0 ? (
-                    <Table.Row>
-                      <Table.Cell colSpan={3} className="text-center py-4">
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-center py-4">
                         No hay docentes registrados.
-                      </Table.Cell>
-                    </Table.Row>
+                      </TableCell>
+                    </TableRow>
                   ) : (
                     teachers.map((teacher) => (
-                      <Table.Row key={teacher.username} className="bg-white">
-                        <Table.Cell className="font-semibold text-gray-900">
+                      <TableRow key={teacher.username} className="bg-white">
+                        <TableCell className="font-semibold text-gray-900">
                           {teacher.username}
-                        </Table.Cell>
-                        <Table.Cell>{teacher.name}</Table.Cell>
-                        <Table.Cell className="font-mono text-gray-500">
+                        </TableCell>
+                        <TableCell>{teacher.name}</TableCell>
+                        <TableCell className="font-mono text-gray-500">
                           {teacher.courseCode || "No asignado"}
-                        </Table.Cell>
-                      </Table.Row>
+                        </TableCell>
+                      </TableRow>
                     ))
                   )}
-                </Table.Body>
+                </TableBody>
               </Table>
             )}
 
             {activeTab === "students" && (
               <Table hoverable>
-                <Table.Head>
-                  <Table.HeadCell>CUI</Table.HeadCell>
-                  <Table.HeadCell>Nombre Estudiante</Table.HeadCell>
-                </Table.Head>
-                <Table.Body className="divide-y">
+                <TableHead>
+                  <TableRow>
+                    <TableHeadCell>CUI</TableHeadCell>
+                    <TableHeadCell>Nombre Estudiante</TableHeadCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody className="divide-y">
                   {students.length === 0 ? (
-                    <Table.Row>
-                      <Table.Cell colSpan={2} className="text-center py-4">
+                    <TableRow>
+                      <TableCell colSpan={2} className="text-center py-4">
                         No hay estudiantes registrados.
-                      </Table.Cell>
-                    </Table.Row>
+                      </TableCell>
+                    </TableRow>
                   ) : (
                     students.map((student) => (
-                      <Table.Row key={student.cui} className="bg-white">
-                        <Table.Cell className="font-mono text-gray-900">
+                      <TableRow key={student.cui} className="bg-white">
+                        <TableCell className="font-mono text-gray-900">
                           {student.cui}
-                        </Table.Cell>
-                        <Table.Cell>{student.name}</Table.Cell>
-                      </Table.Row>
+                        </TableCell>
+                        <TableCell>{student.name}</TableCell>
+                      </TableRow>
                     ))
                   )}
-                </Table.Body>
+                </TableBody>
               </Table>
             )}
 
             {activeTab === "audit" && (
               <Table hoverable>
-                <Table.Head>
-                  <Table.HeadCell>ID</Table.HeadCell>
-                  <Table.HeadCell>Fecha / Hora</Table.HeadCell>
-                  <Table.HeadCell>Curso</Table.HeadCell>
-                  <Table.HeadCell>Grupo</Table.HeadCell>
-                  <Table.HeadCell>Estudiante (CUI)</Table.HeadCell>
-                </Table.Head>
-                <Table.Body className="divide-y">
+                <TableHead>
+                  <TableRow>
+                    <TableHeadCell>ID</TableHeadCell>
+                    <TableHeadCell>Fecha / Hora</TableHeadCell>
+                    <TableHeadCell>Curso</TableHeadCell>
+                    <TableHeadCell>Grupo</TableHeadCell>
+                    <TableHeadCell>Estudiante (CUI)</TableHeadCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody className="divide-y">
                   {auditLogs.length === 0 ? (
-                    <Table.Row>
-                      <Table.Cell colSpan={5} className="text-center py-4">
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-4">
                         No hay registros de asistencia en la auditoría.
-                      </Table.Cell>
-                    </Table.Row>
+                      </TableCell>
+                    </TableRow>
                   ) : (
                     auditLogs.map((log) => (
-                      <Table.Row key={log.id} className="bg-white">
-                        <Table.Cell>{log.id}</Table.Cell>
-                        <Table.Cell>
+                      <TableRow key={log.id} className="bg-white">
+                        <TableCell>{log.id}</TableCell>
+                        <TableCell>
                           {new Date(log.timestamp).toLocaleString("es-PE")}
-                        </Table.Cell>
-                        <Table.Cell>
+                        </TableCell>
+                        <TableCell>
                           {log.courseName} ({log.courseCode})
-                        </Table.Cell>
-                        <Table.Cell className="text-center">
+                        </TableCell>
+                        <TableCell className="text-center">
                           {log.groupLetter}
-                        </Table.Cell>
-                        <Table.Cell>
+                        </TableCell>
+                        <TableCell>
                           {log.studentName} ({log.studentCui})
-                        </Table.Cell>
-                      </Table.Row>
+                        </TableCell>
+                      </TableRow>
                     ))
                   )}
-                </Table.Body>
+                </TableBody>
               </Table>
             )}
           </div>
@@ -478,7 +478,7 @@ export default function AdminDashboardPage() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4">
             <Button
-              color="failure"
+              color="red"
               onClick={handleClearSystemData}
               disabled={loading}
               size="sm"
@@ -486,7 +486,7 @@ export default function AdminDashboardPage() {
               Vaciar Datos del Sistema (Cursos, Docentes, Alumnos)
             </Button>
             <Button
-              color="warning"
+              color="yellow"
               onClick={handleClearAuditLogs}
               disabled={loading}
               size="sm"

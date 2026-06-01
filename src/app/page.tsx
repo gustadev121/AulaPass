@@ -3,7 +3,7 @@ import Link from "next/link";
 
 export default function HomePage() {
   return (
-    <main className="flex-grow flex items-center justify-center p-4">
+    <main className="grow flex items-center justify-center p-4">
       <div className="max-w-4xl w-full text-center space-y-8">
         <div>
           <h1 className="text-4xl font-extrabold tracking-tight text-gray-900 sm:text-5xl">
@@ -23,10 +23,8 @@ export default function HomePage() {
               Ingresa con tu CUI para registrar tu asistencia en clase usando el
               código proporcionado por el docente.
             </p>
-            <Link href="/estudiante/login" passHref legacyBehavior>
-              <Button color="info" className="w-full mt-auto">
-                Ingresar como Estudiante
-              </Button>
+            <Link href="/estudiante/login">
+              <Button color="green">Ingresar como Estudiante</Button>
             </Link>
           </Card>
 
@@ -38,10 +36,8 @@ export default function HomePage() {
               Configura tus clases y genera códigos dinámicos y temporales de
               asistencia para tus alumnos.
             </p>
-            <Link href="/docente/login" passHref legacyBehavior>
-              <Button color="success" className="w-full mt-auto">
-                Ingresar como Docente
-              </Button>
+            <Link href="/docente/login">
+              <Button color="blue">Ingresar como Docente</Button>
             </Link>
           </Card>
 
@@ -53,10 +49,8 @@ export default function HomePage() {
               Sube la información de la universidad (Cursos, Docentes,
               Estudiantes) y consulta el registro de auditoría.
             </p>
-            <Link href="/admin/login" passHref legacyBehavior>
-              <Button color="gray" className="w-full mt-auto">
-                Ingresar como Admin
-              </Button>
+            <Link href="/admin/login">
+              <Button color="purple">Ingresar como Admin</Button>
             </Link>
           </Card>
         </div>

@@ -34,7 +34,7 @@ export default function StudentRegistrationPage() {
     return null;
   }
 
-  const handleLookup = async (e: React.FormEvent) => {
+  const handleLookup = async (e: React.SubmitEvent) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
@@ -84,7 +84,7 @@ export default function StudentRegistrationPage() {
   };
 
   return (
-    <main className="flex-grow flex items-center justify-center p-4">
+    <main className="grow flex items-center justify-center p-4">
       <Card className="max-w-md w-full">
         <div className="flex justify-between items-center border-b pb-3">
           <div>
@@ -122,7 +122,7 @@ export default function StudentRegistrationPage() {
           <form onSubmit={handleLookup} className="flex flex-col gap-4 mt-2">
             <div>
               <div className="mb-2 block">
-                <Label htmlFor="code" value="Código de Asistencia" />
+                <Label htmlFor="code">Código de Asistencia</Label>
               </div>
               <TextInput
                 id="code"

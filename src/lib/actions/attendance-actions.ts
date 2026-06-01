@@ -3,7 +3,7 @@
 import { format } from "date-fns";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { attendanceAudit, students, teachers } from "@/db/schema";
+import { attendanceAudit, courses, students, teachers } from "@/db/schema";
 
 /**
  * Registers attendance for a student in a specific course and group.

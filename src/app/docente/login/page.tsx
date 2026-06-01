@@ -14,7 +14,7 @@ export default function TeacherLoginPage() {
   const router = useRouter();
   const { setTeacher } = useAuth();
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.SubmitEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
@@ -35,7 +35,7 @@ export default function TeacherLoginPage() {
   };
 
   return (
-    <main className="flex-grow flex items-center justify-center p-4">
+    <main className="grow flex items-center justify-center p-4">
       <Card className="max-w-md w-full">
         <h2 className="text-2xl font-bold text-center text-gray-900">
           Portal de Docentes
@@ -47,7 +47,7 @@ export default function TeacherLoginPage() {
         <form onSubmit={handleLogin} className="flex flex-col gap-4 mt-4">
           <div>
             <div className="mb-2 block">
-              <Label htmlFor="username" value="Usuario" />
+              <Label htmlFor="username">Usuario</Label>
             </div>
             <TextInput
               id="username"
@@ -62,7 +62,7 @@ export default function TeacherLoginPage() {
 
           <div>
             <div className="mb-2 block">
-              <Label htmlFor="password" value="Contraseña" />
+              <Label htmlFor="password">Contraseña</Label>
             </div>
             <TextInput
               id="password"
@@ -76,7 +76,7 @@ export default function TeacherLoginPage() {
 
           {error && <Alert color="failure">{error}</Alert>}
 
-          <Button type="submit" color="success" disabled={loading}>
+          <Button disabled={loading}>
             {loading ? "Validando..." : "Ingresar"}
           </Button>
         </form>

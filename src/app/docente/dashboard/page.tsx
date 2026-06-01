@@ -89,7 +89,7 @@ export default function TeacherDashboardPage() {
     return null;
   }
 
-  const handleGenerate = async (e: React.FormEvent) => {
+  const handleGenerate = async (e: React.SubmitEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
@@ -112,7 +112,7 @@ export default function TeacherDashboardPage() {
   };
 
   return (
-    <main className="flex-grow flex items-center justify-center p-4">
+    <main className="grow flex items-center justify-center p-4">
       <Card className="max-w-md w-full">
         <div className="flex justify-between items-center border-b pb-3">
           <div>
@@ -146,7 +146,7 @@ export default function TeacherDashboardPage() {
           <form onSubmit={handleGenerate} className="flex flex-col gap-4 mt-2">
             <div>
               <div className="mb-2 block">
-                <Label htmlFor="group" value="Seleccionar Grupo" />
+                <Label htmlFor="group">Seleccionar Grupo</Label>
               </div>
               <Select
                 id="group"
@@ -165,7 +165,7 @@ export default function TeacherDashboardPage() {
 
             <div>
               <div className="mb-2 block">
-                <Label htmlFor="length" value="Longitud del Código (6 - 12)" />
+                <Label htmlFor="length">Longitud del Código (6 - 12)</Label>
               </div>
               <TextInput
                 id="length"
@@ -181,10 +181,9 @@ export default function TeacherDashboardPage() {
 
             <div>
               <div className="mb-2 block">
-                <Label
-                  htmlFor="duration"
-                  value="Duración en Pantalla (5s - 30s)"
-                />
+                <Label htmlFor="duration">
+                  Duración en Pantalla (5s - 30s)
+                </Label>
               </div>
               <TextInput
                 id="duration"
