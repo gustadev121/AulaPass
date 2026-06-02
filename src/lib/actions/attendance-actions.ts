@@ -33,7 +33,6 @@ export async function registerAttendanceAction(params: {
       codeExpiration,
     } = params;
 
-    // REQ-15: Validation of time limits (+1s Invalid, 0s Valid, -1s Valid)
     if (clientTimestamp > codeExpiration) {
       throw new Error("El código ha expirado");
     }
@@ -43,7 +42,6 @@ export async function registerAttendanceAction(params: {
     });
     if (!student) throw new Error("CUI no registrado");
 
-    // REQ-16: Control de Duplicados (same day + course + group + student)
     const today = format(new Date(), "yyyy-MM-dd");
     const existing = await db.query.attendanceAudit.findFirst({
       where: and(
@@ -60,7 +58,6 @@ export async function registerAttendanceAction(params: {
       );
     }
 
-    // REQ-17: Auditoría de Asistencia
     await db.insert(attendanceAudit).values({
       courseCode,
       courseName,
@@ -94,7 +91,6 @@ export async function lookupCodeAction(code: string) {
     }
 
     if (Date.now() > active.expiresAt.getTime()) {
-      // Cleanup expired code
       await db.delete(activeCodes).where(eq(activeCodes.code, cleanCode));
       return { success: false, error: "El código ha expirado" };
     }

@@ -25,7 +25,6 @@ export default function StudentRegistrationPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Guard route - redirect to login if no CUI is stored in context
   useEffect(() => {
     if (!studentCui) {
       router.push("/estudiante/login");

@@ -25,7 +25,7 @@ export async function generateCodeAction(params: {
   groupLetter: string;
   teacherUsername: string;
   durationSeconds: number;
-  length: number; // Renamed to match UI
+  length: number;
 }) {
   try {
     const {
@@ -79,7 +79,6 @@ export async function generateCodeAction(params: {
       expiresAt,
     });
 
-    // Cleanup expired codes
     await db.delete(activeCodes).where(lt(activeCodes.expiresAt, new Date()));
 
     return {
