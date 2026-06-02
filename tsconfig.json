@@ -19,7 +19,8 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@flowbite-react/*": ["./.flowbite-react/*"]
     }
   },
   "include": [

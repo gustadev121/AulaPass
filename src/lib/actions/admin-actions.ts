@@ -151,3 +151,68 @@ export async function clearAuditLogsAction() {
     return { success: false, error: "Error al limpiar auditoría" };
   }
 }
+
+/**
+ * Retrieves all courses from the database.
+ */
+export async function getCoursesAction() {
+  try {
+    const data = await db.query.courses.findMany();
+    return { success: true, data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Error al cargar cursos",
+    };
+  }
+}
+
+/**
+ * Retrieves all teachers from the database.
+ */
+export async function getTeachersAction() {
+  try {
+    const data = await db.query.teachers.findMany();
+    return { success: true, data };
+  } catch (error) {
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Error al cargar docentes",
+    };
+  }
+}
+
+/**
+ * Retrieves all students from the database.
+ */
+export async function getStudentsAction() {
+  try {
+    const data = await db.query.students.findMany();
+    return { success: true, data };
+  } catch (error) {
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Error al cargar estudiantes",
+    };
+  }
+}
+
+/**
+ * Retrieves all attendance audit logs, ordered by timestamp descending.
+ */
+export async function getAuditLogsAction() {
+  try {
+    const data = await db.query.attendanceAudit.findMany({
+      orderBy: (audit, { desc }) => [desc(audit.timestamp)],
+    });
+    return { success: true, data };
+  } catch (error) {
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Error al cargar auditoría",
+    };
+  }
+}

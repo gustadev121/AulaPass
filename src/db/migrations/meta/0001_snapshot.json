@@ -1,9 +1,58 @@
 {
-  "id": "5391eee7-76d2-4447-b4e9-bff603d1e0db",
-  "prevId": "00000000-0000-0000-0000-000000000000",
+  "id": "c3933a29-d73b-4f62-8406-125c95879e7e",
+  "prevId": "5391eee7-76d2-4447-b4e9-bff603d1e0db",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
+    "public.active_codes": {
+      "name": "active_codes",
+      "schema": "",
+      "columns": {
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "course_code": {
+          "name": "course_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "course_name": {
+          "name": "course_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "group_letter": {
+          "name": "group_letter",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "teacher_username": {
+          "name": "teacher_username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.attendance_audit": {
       "name": "attendance_audit",
       "schema": "",
