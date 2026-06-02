@@ -1,14 +1,14 @@
 import { defineConfig } from "drizzle-kit";
 
+const postgresURL =
+  process.env.DB_URL || "postgres://postgres:postgres@localhost:5432/aulapass";
+
 export default defineConfig({
   schema: "./src/db/schema.ts",
   out: "./src/db/migrations",
   dialect: "postgresql",
+  schemaFilter: ["public"],
   dbCredentials: {
-    host: "127.0.0.1",
-    port: 5432,
-    user: "postgres",
-    password: "postgres",
-    database: "aulapass",
+    url: postgresURL,
   },
 });

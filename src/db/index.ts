@@ -2,12 +2,11 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";
 
-const sql = postgres({
-  host: process.env.DB_HOST || "localhost",
-  port: parseInt(process.env.DB_PORT || "5432", 10),
-  user: process.env.DB_USER || "postgres",
-  password: process.env.DB_PASSWORD || "postgres",
-  database: process.env.DB_NAME || "aulapass",
+const postgresURL =
+  process.env.DB_URL || "postgres://postgres:postgres@localhost:5432/aulapass";
+
+const sql = postgres(postgresURL, {
+  prepare: false,
 });
 
 /**
