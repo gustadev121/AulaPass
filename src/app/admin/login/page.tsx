@@ -4,6 +4,7 @@ import { Alert, Button, Card, Label, TextInput } from "flowbite-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useAuth } from "@/app/AuthContext";
+import { validateAdminCredentials } from "@/lib/auth/admin-auth";
 
 export default function AdminLoginPage() {
   const [username, setUsername] = useState("");
@@ -18,7 +19,7 @@ export default function AdminLoginPage() {
     setError(null);
     setLoading(true);
 
-    if (username === "admin" && password === "admin") {
+    if (validateAdminCredentials(username, password)) {
       setAdminAuthenticated(true);
       router.push("/admin/dashboard");
     } else {
