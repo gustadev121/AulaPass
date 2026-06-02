@@ -7,7 +7,7 @@
  * @see TEST_CATALOG.md P_Adm_Login_01, P_Adm_Login_02
  * @see admin.feature lines 3-11
  */
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { validateAdminCredentials } from "@/lib/auth/admin-auth";
 
 describe("01 — Login Administrador (REQ-01)", () => {

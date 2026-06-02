@@ -9,7 +9,7 @@
  * @see TEST_CATALOG.md P_Doc_Usr_01–02, P_Doc_Pwd_01–02, P_Doc_Nom_01–02, P_Doc_Cod_01–02
  * @see admin.feature lines 38-49
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { TeacherCSVSchema } from "@/lib/validations/csv-schemas";
 
 // Mock the DB module at the boundary

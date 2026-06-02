@@ -7,7 +7,7 @@
  * @see TEST_CATALOG.md P_DocLog_01, P_DocLog_02
  * @see docente.feature lines 3-11
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the DB module at the boundary
 vi.mock("@/db", () => {

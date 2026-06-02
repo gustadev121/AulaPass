@@ -8,7 +8,7 @@
  * @see TEST_CATALOG.md P_Asis_Tpo_01, P_Asis_Tpo_02, P_Asis_Tpo_03
  * @see estudiante.feature lines 13-33
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the DB module at the boundary
 vi.mock("@/db", () => {
@@ -25,14 +25,16 @@ describe("08 — Marcación y Expiración del Código (REQ-14, REQ-15)", () => {
   async function setupDefaultMocks() {
     const { db } = await import("./__mocks__/db");
     // Student exists
-    (db.query.students.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
-      cui: "12345678",
-      name: "Maria Lopez",
-    });
-    // No attendance recorded today yet
-    (db.query.attendanceAudit.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(
-      undefined,
+    (db.query.students.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        cui: "12345678",
+        name: "Maria Lopez",
+      },
     );
+    // No attendance recorded today yet
+    (
+      db.query.attendanceAudit.findFirst as ReturnType<typeof vi.fn>
+    ).mockResolvedValue(undefined);
   }
 
   /**

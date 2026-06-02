@@ -9,7 +9,7 @@
  * @see TEST_CATALOG.md P_Cur_Cod_01–03, P_Cur_Abrev_01–02, P_Cur_Nom_01–02, P_Cur_Grp_01–04
  * @see admin.feature lines 13-36
  */
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { CourseCSVSchema } from "@/lib/validations/csv-schemas";
 
 /** Helper: builds a valid course row, allowing specific field overrides. */
