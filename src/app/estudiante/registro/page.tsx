@@ -4,8 +4,10 @@ import { Alert, Button, Card, Label, TextInput } from "flowbite-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/app/AuthContext";
-import { lookupCodeAction } from "@/lib/actions/active-code-actions";
-import { registerAttendanceAction } from "@/lib/actions/attendance-actions";
+import {
+  lookupCodeAction,
+  registerAttendanceAction,
+} from "@/lib/actions/attendance-actions";
 
 export default function StudentRegistrationPage() {
   const { studentCui, studentName, logout } = useAuth();
@@ -23,7 +25,6 @@ export default function StudentRegistrationPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Guard route - redirect to login if no CUI is stored in context
   useEffect(() => {
     if (!studentCui) {
       router.push("/estudiante/login");

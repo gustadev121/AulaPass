@@ -93,7 +93,6 @@ export default function AdminDashboardPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Route guard - redirect if not authenticated
   useEffect(() => {
     if (!adminAuthenticated) {
       router.push("/admin/login");
@@ -132,7 +131,6 @@ export default function AdminDashboardPage() {
     }
   }, [activeTab]);
 
-  // Reload when tab changes
   useEffect(() => {
     if (adminAuthenticated) {
       loadData();
@@ -186,7 +184,6 @@ export default function AdminDashboardPage() {
         );
       }
       setLoading(false);
-      // Reset file input
       e.target.value = "";
     };
 

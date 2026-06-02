@@ -3,11 +3,17 @@
 import { format } from "date-fns";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { attendanceAudit, courses, students, teachers } from "@/db/schema";
+import {
+  activeCodes,
+  attendanceAudit,
+  courses,
+  students,
+  teachers,
+} from "@/db/schema";
 
 /**
- * Registers attendance for a student in a specific course and group.
- * @param params - Registration parameters including student CUI, course details, and timestamps.
+ * Registers attendance for a student using a volatile code.
+ * Satisfies REQ-14, REQ-15, REQ-16, REQ-17.
  */
 export async function registerAttendanceAction(params: {
   cui: string;
@@ -27,17 +33,16 @@ export async function registerAttendanceAction(params: {
       codeExpiration,
     } = params;
 
+    if (clientTimestamp > codeExpiration) {
+      throw new Error("El código ha expirado");
+    }
+
     const student = await db.query.students.findFirst({
       where: eq(students.cui, cui),
     });
     if (!student) throw new Error("CUI no registrado");
 
-    if (clientTimestamp > codeExpiration) {
-      throw new Error("El código ha expirado");
-    }
-
     const today = format(new Date(), "yyyy-MM-dd");
-
     const existing = await db.query.attendanceAudit.findFirst({
       where: and(
         eq(attendanceAudit.studentCui, cui),
@@ -59,7 +64,7 @@ export async function registerAttendanceAction(params: {
       groupLetter,
       studentCui: cui,
       studentName: student.name,
-      timestamp: new Date(),
+      timestamp: new Date(clientTimestamp),
     });
 
     return { success: true };
@@ -67,6 +72,43 @@ export async function registerAttendanceAction(params: {
     return {
       success: false,
       error: error instanceof Error ? error.message : "Error desconocido",
+    };
+  }
+}
+
+/**
+ * Searches for a valid, active attendance code in the database.
+ */
+export async function lookupCodeAction(code: string) {
+  try {
+    const cleanCode = code.trim().toUpperCase();
+    const active = await db.query.activeCodes.findFirst({
+      where: eq(activeCodes.code, cleanCode),
+    });
+
+    if (!active) {
+      return { success: false, error: "Código inválido" };
+    }
+
+    if (Date.now() > active.expiresAt.getTime()) {
+      await db.delete(activeCodes).where(eq(activeCodes.code, cleanCode));
+      return { success: false, error: "El código ha expirado" };
+    }
+
+    return {
+      success: true,
+      data: {
+        courseCode: active.courseCode,
+        courseName: active.courseName,
+        groupLetter: active.groupLetter,
+        expiresAt: active.expiresAt.getTime(),
+      },
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Error al verificar código",
     };
   }
 }

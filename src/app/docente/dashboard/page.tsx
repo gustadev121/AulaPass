@@ -12,8 +12,8 @@ import {
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/app/AuthContext";
-import { generateCodeAction } from "@/lib/actions/active-code-actions";
 import { getCourseDetailsAction } from "@/lib/actions/attendance-actions";
+import { generateCodeAction } from "@/lib/actions/teacher-actions";
 
 export default function TeacherDashboardPage() {
   const { teacherUsername, teacherName, teacherCourseCode, logout } = useAuth();
@@ -22,12 +22,10 @@ export default function TeacherDashboardPage() {
   const [courseName, setCourseName] = useState("");
   const [groups, setGroups] = useState<string[]>([]);
 
-  // Config fields
   const [selectedGroup, setSelectedGroup] = useState("");
   const [codeLength, setCodeLength] = useState(6);
   const [codeDuration, setCodeDuration] = useState(15);
 
-  // Active code state
   const [generatedCode, setGeneratedCode] = useState<string | null>(null);
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState<number>(0);
@@ -35,14 +33,12 @@ export default function TeacherDashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Route guard - redirect to login if no teacher session
   useEffect(() => {
     if (!teacherUsername || !teacherCourseCode) {
       router.push("/docente/login");
     }
   }, [teacherUsername, teacherCourseCode, router]);
 
-  // Load course details based on teacherCourseCode
   useEffect(() => {
     if (teacherCourseCode) {
       getCourseDetailsAction(teacherCourseCode).then((res) => {
@@ -64,7 +60,6 @@ export default function TeacherDashboardPage() {
     }
   }, [teacherCourseCode]);
 
-  // Countdown timer logic
   useEffect(() => {
     if (!expiresAt) return;
 
@@ -80,7 +75,7 @@ export default function TeacherDashboardPage() {
         setGeneratedCode(null);
         setExpiresAt(null);
       }
-    }, 100); // Frequent poll for high resolution countdown
+    }, 100);
 
     return () => clearInterval(timer);
   }, [expiresAt]);
@@ -94,9 +89,16 @@ export default function TeacherDashboardPage() {
     setError(null);
     setLoading(true);
 
+    if (!teacherCourseCode || !teacherUsername) {
+      setError("Sesión de docente no válida.");
+      setLoading(false);
+      return;
+    }
+
     const res = await generateCodeAction({
       courseCode: teacherCourseCode,
       groupLetter: selectedGroup,
+      teacherUsername: teacherUsername,
       length: codeLength,
       durationSeconds: codeDuration,
     });

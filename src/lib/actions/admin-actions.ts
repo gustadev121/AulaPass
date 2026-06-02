@@ -10,7 +10,9 @@ import {
 
 /**
  * Uploads and upserts courses from CSV data.
+ *
  * @param data - Array of course data from CSV.
+ * @returns A promise that resolves to an object indicating success or failure.
  */
 export async function uploadCoursesAction(data: unknown[]) {
   try {
@@ -46,7 +48,9 @@ export async function uploadCoursesAction(data: unknown[]) {
 
 /**
  * Uploads and upserts teachers from CSV data.
+ *
  * @param data - Array of teacher data from CSV.
+ * @returns A promise that resolves to an object indicating success or failure.
  */
 export async function uploadTeachersAction(data: unknown[]) {
   try {
@@ -82,7 +86,9 @@ export async function uploadTeachersAction(data: unknown[]) {
 
 /**
  * Uploads and upserts students from CSV data.
+ *
  * @param data - Array of student data from CSV.
+ * @returns A promise that resolves to an object indicating success or failure.
  */
 export async function uploadStudentsAction(data: unknown[]) {
   try {
@@ -118,6 +124,8 @@ export async function uploadStudentsAction(data: unknown[]) {
 
 /**
  * Clears all courses, teachers, and students from the system.
+ *
+ * @returns A promise that resolves to an object indicating success or failure.
  */
 export async function clearSystemDataAction() {
   try {
@@ -132,6 +140,8 @@ export async function clearSystemDataAction() {
 
 /**
  * Clears all attendance audit logs from the system.
+ *
+ * @returns A promise that resolves to an object indicating success or failure.
  */
 export async function clearAuditLogsAction() {
   try {
