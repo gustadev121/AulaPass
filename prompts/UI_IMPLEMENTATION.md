@@ -1,8 +1,6 @@
-## Prompt
-El proyecto actual es un sistema de gestión de asistencia para estudiantes en los salones universitarios de la UNSA, Arequipa, Perú. Es un MVP sencillo y funcional cuyos requerimientos específicos se encuentran en @REQUIREMENTS.md. Elabora un plan detallado para implementar las interfaces de usuario requeridas considerando el contexto actual del proyecto: uso de bun y flowbite con NextJS. Revisa las skills disponibles y el estado actual del proyecto.
+## Plan de Implementación de Interfaces de Usuario
 
-## Plan de Implementación
-**Plan de Implementación de Interfaces de Usuario - AulaPass (Enfoque Funcional MVP)**
+El proyecto actual es un sistema de gestión de asistencia para estudiantes en los salones universitarios de la UNSA, Arequipa, Perú. Es un MVP sencillo y funcional cuyos requerimientos específicos se encuentran en @REQUIREMENTS.md. Elabora un plan detallado para implementar las interfaces de usuario requeridas considerando el contexto actual del proyecto: uso de bun y flowbite con NextJS. Revisa las skills disponibles y el estado actual del proyecto.
 
 Este documento presenta el plan simplificado para implementar las interfaces de usuario de AulaPass, enfocado estrictamente en la funcionalidad del MVP. Usaremos los componentes predefinidos de Flowbite React sin personalizaciones de estilos adicionales para optimizar el tiempo de desarrollo.
 

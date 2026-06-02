@@ -8,7 +8,7 @@
  * @see TEST_CATALOG.md P_Est_CUI_01–03, P_Est_Nom_01–02
  * @see admin.feature lines 51-62
  */
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { StudentCSVSchema } from "@/lib/validations/csv-schemas";
 
 /** Helper: builds a valid student row, allowing specific field overrides. */

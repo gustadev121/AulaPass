@@ -9,7 +9,7 @@
  * @see TEST_CATALOG.md P_Conf_Grp_01–02, P_Conf_Lon_01–06, P_Conf_Dur_01–06
  * @see docente.feature lines 13-43
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the DB module at the boundary
 vi.mock("@/db", () => {
@@ -33,9 +33,9 @@ describe("06 — Configuración de Clase (REQ-11)", () => {
       groups,
     });
     // Mock the code uniqueness check to say it is unique
-    (db.query.activeCodes.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(
-      undefined,
-    );
+    (
+      db.query.activeCodes.findFirst as ReturnType<typeof vi.fn>
+    ).mockResolvedValue(undefined);
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -48,7 +48,9 @@ describe("06 — Configuración de Clase (REQ-11)", () => {
   it("[P_Conf_Grp_01] grupo existente en el curso → configuración aceptada", async () => {
     // Arrange
     await setupDefaultMocks("A,B");
-    const { generateCodeAction } = await import("@/lib/actions/teacher-actions");
+    const { generateCodeAction } = await import(
+      "@/lib/actions/teacher-actions"
+    );
     const params = {
       courseCode: "MAT1234",
       groupLetter: "A",
@@ -70,7 +72,9 @@ describe("06 — Configuración de Clase (REQ-11)", () => {
   it("[P_Conf_Grp_02] grupo no existente en el curso → error de validación", async () => {
     // Arrange
     await setupDefaultMocks("A,B");
-    const { generateCodeAction } = await import("@/lib/actions/teacher-actions");
+    const { generateCodeAction } = await import(
+      "@/lib/actions/teacher-actions"
+    );
     const params = {
       courseCode: "MAT1234",
       groupLetter: "Z",
@@ -97,7 +101,9 @@ describe("06 — Configuración de Clase (REQ-11)", () => {
   it("[P_Conf_Lon_01] longitud = 5 (inválida) → error de validación", async () => {
     // Arrange
     await setupDefaultMocks("A,B");
-    const { generateCodeAction } = await import("@/lib/actions/teacher-actions");
+    const { generateCodeAction } = await import(
+      "@/lib/actions/teacher-actions"
+    );
     const params = {
       courseCode: "MAT1234",
       groupLetter: "A",
@@ -120,7 +126,9 @@ describe("06 — Configuración de Clase (REQ-11)", () => {
   it("[P_Conf_Lon_02] longitud = 6 (válido bajo) → configuración aceptada", async () => {
     // Arrange
     await setupDefaultMocks("A,B");
-    const { generateCodeAction } = await import("@/lib/actions/teacher-actions");
+    const { generateCodeAction } = await import(
+      "@/lib/actions/teacher-actions"
+    );
     const params = {
       courseCode: "MAT1234",
       groupLetter: "A",
@@ -143,7 +151,9 @@ describe("06 — Configuración de Clase (REQ-11)", () => {
   it("[P_Conf_Lon_03] longitud = 7 (válido bajo +1) → configuración aceptada", async () => {
     // Arrange
     await setupDefaultMocks("A,B");
-    const { generateCodeAction } = await import("@/lib/actions/teacher-actions");
+    const { generateCodeAction } = await import(
+      "@/lib/actions/teacher-actions"
+    );
     const params = {
       courseCode: "MAT1234",
       groupLetter: "A",
@@ -166,7 +176,9 @@ describe("06 — Configuración de Clase (REQ-11)", () => {
   it("[P_Conf_Lon_04] longitud = 11 (válido alto -1) → configuración aceptada", async () => {
     // Arrange
     await setupDefaultMocks("A,B");
-    const { generateCodeAction } = await import("@/lib/actions/teacher-actions");
+    const { generateCodeAction } = await import(
+      "@/lib/actions/teacher-actions"
+    );
     const params = {
       courseCode: "MAT1234",
       groupLetter: "A",
@@ -189,7 +201,9 @@ describe("06 — Configuración de Clase (REQ-11)", () => {
   it("[P_Conf_Lon_05] longitud = 12 (válido alto) → configuración aceptada", async () => {
     // Arrange
     await setupDefaultMocks("A,B");
-    const { generateCodeAction } = await import("@/lib/actions/teacher-actions");
+    const { generateCodeAction } = await import(
+      "@/lib/actions/teacher-actions"
+    );
     const params = {
       courseCode: "MAT1234",
       groupLetter: "A",
@@ -212,7 +226,9 @@ describe("06 — Configuración de Clase (REQ-11)", () => {
   it("[P_Conf_Lon_06] longitud = 13 (inválido alto) → error de validación", async () => {
     // Arrange
     await setupDefaultMocks("A,B");
-    const { generateCodeAction } = await import("@/lib/actions/teacher-actions");
+    const { generateCodeAction } = await import(
+      "@/lib/actions/teacher-actions"
+    );
     const params = {
       courseCode: "MAT1234",
       groupLetter: "A",
@@ -239,7 +255,9 @@ describe("06 — Configuración de Clase (REQ-11)", () => {
   it("[P_Conf_Dur_01] duración = 4s (inválida) → error de validación", async () => {
     // Arrange
     await setupDefaultMocks("A,B");
-    const { generateCodeAction } = await import("@/lib/actions/teacher-actions");
+    const { generateCodeAction } = await import(
+      "@/lib/actions/teacher-actions"
+    );
     const params = {
       courseCode: "MAT1234",
       groupLetter: "A",
@@ -262,7 +280,9 @@ describe("06 — Configuración de Clase (REQ-11)", () => {
   it("[P_Conf_Dur_02] duración = 5s (válido bajo) → configuración aceptada", async () => {
     // Arrange
     await setupDefaultMocks("A,B");
-    const { generateCodeAction } = await import("@/lib/actions/teacher-actions");
+    const { generateCodeAction } = await import(
+      "@/lib/actions/teacher-actions"
+    );
     const params = {
       courseCode: "MAT1234",
       groupLetter: "A",
@@ -284,7 +304,9 @@ describe("06 — Configuración de Clase (REQ-11)", () => {
   it("[P_Conf_Dur_03] duración = 6s (válido bajo +1) → configuración aceptada", async () => {
     // Arrange
     await setupDefaultMocks("A,B");
-    const { generateCodeAction } = await import("@/lib/actions/teacher-actions");
+    const { generateCodeAction } = await import(
+      "@/lib/actions/teacher-actions"
+    );
     const params = {
       courseCode: "MAT1234",
       groupLetter: "A",
@@ -306,7 +328,9 @@ describe("06 — Configuración de Clase (REQ-11)", () => {
   it("[P_Conf_Dur_04] duración = 29s (válido alto -1) → configuración aceptada", async () => {
     // Arrange
     await setupDefaultMocks("A,B");
-    const { generateCodeAction } = await import("@/lib/actions/teacher-actions");
+    const { generateCodeAction } = await import(
+      "@/lib/actions/teacher-actions"
+    );
     const params = {
       courseCode: "MAT1234",
       groupLetter: "A",
@@ -328,7 +352,9 @@ describe("06 — Configuración de Clase (REQ-11)", () => {
   it("[P_Conf_Dur_05] duración = 30s (válido alto) → configuración aceptada", async () => {
     // Arrange
     await setupDefaultMocks("A,B");
-    const { generateCodeAction } = await import("@/lib/actions/teacher-actions");
+    const { generateCodeAction } = await import(
+      "@/lib/actions/teacher-actions"
+    );
     const params = {
       courseCode: "MAT1234",
       groupLetter: "A",
@@ -350,7 +376,9 @@ describe("06 — Configuración de Clase (REQ-11)", () => {
   it("[P_Conf_Dur_06] duración = 31s (inválido alto) → error de validación", async () => {
     // Arrange
     await setupDefaultMocks("A,B");
-    const { generateCodeAction } = await import("@/lib/actions/teacher-actions");
+    const { generateCodeAction } = await import(
+      "@/lib/actions/teacher-actions"
+    );
     const params = {
       courseCode: "MAT1234",
       groupLetter: "A",

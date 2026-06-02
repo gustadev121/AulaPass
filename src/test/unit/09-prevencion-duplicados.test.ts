@@ -8,7 +8,7 @@
  * @see TEST_CATALOG.md P_Asis_Dup_01, P_Asis_Dup_02
  * @see estudiante.feature lines 35-51
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the DB module at the boundary
 vi.mock("@/db", () => {
@@ -24,10 +24,12 @@ describe("09 — Prevención de Duplicados (REQ-16, REQ-17)", () => {
   /** Helper: sets up student mock. */
   async function setupStudentMock() {
     const { db } = await import("./__mocks__/db");
-    (db.query.students.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({
-      cui: "12345678",
-      name: "Maria Lopez",
-    });
+    (db.query.students.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        cui: "12345678",
+        name: "Maria Lopez",
+      },
+    );
   }
 
   /**
@@ -45,9 +47,9 @@ describe("09 — Prevención de Duplicados (REQ-16, REQ-17)", () => {
     const { db } = await import("./__mocks__/db");
 
     // No attendance recorded today yet
-    (db.query.attendanceAudit.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(
-      undefined,
-    );
+    (
+      db.query.attendanceAudit.findFirst as ReturnType<typeof vi.fn>
+    ).mockResolvedValue(undefined);
 
     const { registerAttendanceAction } = await import(
       "@/lib/actions/attendance-actions"
@@ -93,9 +95,9 @@ describe("09 — Prevención de Duplicados (REQ-16, REQ-17)", () => {
       studentCui: "12345678",
       timestamp: new Date(),
     };
-    (db.query.attendanceAudit.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(
-      existingAuditRecord,
-    );
+    (
+      db.query.attendanceAudit.findFirst as ReturnType<typeof vi.fn>
+    ).mockResolvedValue(existingAuditRecord);
 
     const { registerAttendanceAction } = await import(
       "@/lib/actions/attendance-actions"
