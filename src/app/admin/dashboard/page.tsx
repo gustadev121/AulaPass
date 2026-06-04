@@ -14,6 +14,7 @@ import {
   TableRow,
 } from "flowbite-react";
 import { useRouter } from "next/navigation";
+import Papa from "papaparse";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/app/AuthContext";
 import {
@@ -29,27 +30,6 @@ import {
 } from "@/lib/actions/admin-actions";
 
 type TabName = "courses" | "teachers" | "students" | "audit";
-
-function parseCSV(text: string): Record<string, string>[] {
-  const lines = text
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean);
-  if (lines.length === 0) return [];
-
-  const headers = lines[0]
-    .split(",")
-    .map((h) => h.trim().replace(/^\uFEFF/, ""));
-
-  return lines.slice(1).map((line) => {
-    const values = line.split(",").map((v) => v.trim());
-    const obj: Record<string, string> = {};
-    headers.forEach((header, index) => {
-      obj[header] = values[index] || "";
-    });
-    return obj;
-  });
-}
 
 export default function AdminDashboardPage() {
   const { adminAuthenticated, logout } = useAuth();
@@ -152,47 +132,43 @@ export default function AdminDashboardPage() {
     setSuccess(null);
     setLoading(true);
 
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const text = event.target?.result as string;
-      const parsedData = parseCSV(text);
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: async (results) => {
+        const parsedData = results.data as Record<string, string>[];
 
-      if (parsedData.length === 0) {
-        setError("El archivo CSV está vacío o tiene formato inválido.");
+        if (parsedData.length === 0) {
+          setError("El archivo CSV está vacío o tiene formato inválido.");
+          setLoading(false);
+          return;
+        }
+
+        let res: { success: boolean; error?: string } | undefined;
+        if (type === "courses") {
+          res = await uploadCoursesAction(parsedData);
+        } else if (type === "teachers") {
+          res = await uploadTeachersAction(parsedData);
+        } else if (type === "students") {
+          res = await uploadStudentsAction(parsedData);
+        }
+
+        if (res?.success) {
+          setSuccess(
+            `¡Archivo CSV de ${type === "courses" ? "Cursos" : type === "teachers" ? "Docentes" : "Estudiantes"} cargado con éxito!`,
+          );
+          loadData();
+        } else {
+          setError(res?.error || "Error al procesar el archivo.");
+        }
         setLoading(false);
-        return;
-      }
-
-      let res: { success: boolean; error?: string } | undefined;
-      if (type === "courses") {
-        res = await uploadCoursesAction(parsedData);
-      } else if (type === "teachers") {
-        res = await uploadTeachersAction(parsedData);
-      } else if (type === "students") {
-        res = await uploadStudentsAction(parsedData);
-      }
-
-      if (res?.success) {
-        setSuccess(
-          `¡Archivo CSV de ${type === "courses" ? "Cursos" : type === "teachers" ? "Docentes" : "Estudiantes"} cargado con éxito!`,
-        );
-        loadData();
-      } else {
-        setError(
-          res?.error ||
-            "Error al procesar el archivo. Todo el lote fue rechazado.",
-        );
-      }
-      setLoading(false);
-      e.target.value = "";
-    };
-
-    reader.onerror = () => {
-      setError("Error al leer el archivo.");
-      setLoading(false);
-    };
-
-    reader.readAsText(file);
+        e.target.value = "";
+      },
+      error: (err) => {
+        setError(`Error al leer el archivo: ${err.message}`);
+        setLoading(false);
+      },
+    });
   };
 
   const handleClearSystemData = async () => {
@@ -287,6 +263,88 @@ export default function AdminDashboardPage() {
             Auditoría
           </Button>
         </div>
+
+        {/* CSV Instructions */}
+        {activeTab !== "audit" && (
+          <Card className="bg-blue-50 border-blue-100">
+            <h3 className="text-sm font-bold text-blue-800 mb-2">
+              Instrucciones para la carga de CSV (
+              {activeTab === "courses" && "Cursos"}
+              {activeTab === "teachers" && "Docentes"}
+              {activeTab === "students" && "Estudiantes"})
+            </h3>
+            <div className="text-xs text-blue-700 space-y-2">
+              {activeTab === "courses" && (
+                <>
+                  <p>
+                    El archivo debe tener las columnas:{" "}
+                    <code className="bg-blue-100 px-1 rounded">
+                      code,name,abbreviation,groups
+                    </code>
+                  </p>
+                  <ul className="list-disc ml-4 space-y-1">
+                    <li>
+                      <strong>code:</strong> Código del curso de 7 carácteres.
+                    </li>
+                    <li>
+                      <strong>name:</strong> Nombre completo del curso.
+                    </li>
+                    <li>
+                      <strong>abbreviation:</strong> Abreviatura del curso.
+                    </li>
+                    <li>
+                      <strong>groups:</strong> Letras de grupos separadas por
+                      comas (ej: A,B o "A,B").
+                    </li>
+                  </ul>
+                </>
+              )}
+              {activeTab === "teachers" && (
+                <>
+                  <p>
+                    El archivo debe tener las columnas:{" "}
+                    <code className="bg-blue-100 px-1 rounded">
+                      username,password,name,courseCode
+                    </code>
+                  </p>
+                  <ul className="list-disc ml-4 space-y-1">
+                    <li>
+                      <strong>username:</strong> Nombre de usuario único para el
+                      docente.
+                    </li>
+                    <li>
+                      <strong>password:</strong> Contraseña para el docente.
+                    </li>
+                    <li>
+                      <strong>name:</strong> Nombre completo del docente.
+                    </li>
+                    <li>
+                      <strong>courseCode:</strong> Debe coincidir con un código
+                      de curso de 7 caracteres.
+                    </li>
+                  </ul>
+                </>
+              )}
+              {activeTab === "students" && (
+                <>
+                  <p>
+                    El archivo debe tener las columnas:{" "}
+                    <code className="bg-blue-100 px-1 rounded">cui,name</code>
+                  </p>
+                  <ul className="list-disc ml-4 space-y-1">
+                    <li>
+                      <strong>cui:</strong> Código único del estudiante de 8
+                      dígitos.
+                    </li>
+                    <li>
+                      <strong>name:</strong> Nombre completo del estudiante.
+                    </li>
+                  </ul>
+                </>
+              )}
+            </div>
+          </Card>
+        )}
 
         {/* Dynamic Section Content */}
         <Card>

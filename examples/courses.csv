@@ -1,5 +1,5 @@
 code,name,abbreviation,groups
-1010101,Programacion de Sistemas,PS,A,B
+1010101,Programacion de Sistemas,PS,"A,B"
 1010102,Ingenieria de Software,IS,A
 1010103,Base de Datos,BD,A,B,C
 1010104,Redes y Conectividad,RC,B
